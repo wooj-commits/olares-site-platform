@@ -23,7 +23,7 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY server.py ./
+COPY server.py fastapi_metrics.py ./
 COPY static ./static/
 
 RUN useradd --uid 1000 --create-home app \

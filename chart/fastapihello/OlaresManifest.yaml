@@ -7,7 +7,7 @@ metadata:
   title: FastAPI Hello
   description: Minimal FastAPI app proving non-Next.js runtimes on Olares
   icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
-  version: 0.1.1
+  version: 0.1.2
   categories:
   - Developer Tools
 entrances:
@@ -22,7 +22,7 @@ entrances:
 permission:
   appData: false
 spec:
-  versionName: '0.1.1'
+  versionName: '0.1.2'
   fullDescription: |
     Hello-world FastAPI container for the multi-runtime Olares site platform.
     No Postgres or MinIO. Image: ghcr.io/wooj-commits/olares-site-platform-fastapi.

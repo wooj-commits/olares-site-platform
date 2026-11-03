@@ -19,6 +19,8 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from fastapi_metrics import MetricsMiddleware, metrics_response
+
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -42,7 +44,8 @@ WEBHOOK_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Olares Site Console", version="0.1.0")
+app = FastAPI(title="Olares Site Console", version="0.1.1")
+app.add_middleware(MetricsMiddleware)
 _lock = asyncio.Lock()
 _busy = False
 _busy_msg = ""
@@ -257,9 +260,14 @@ async def healthz():
     return {"status": "ok", "service": "siteconsole"}
 
 
+@app.get("/metrics")
+async def metrics():
+    return metrics_response()
+
+
 @app.get("/api/health")
 async def api_health():
-    return {"ok": True, "runtime": "siteconsole", "version": "0.1.0"}
+    return {"ok": True, "runtime": "siteconsole", "version": "0.1.1"}
 
 
 @app.get("/api/config")
@@ -843,6 +851,45 @@ async def api_registry_put(body: RegistryBody):
 @app.get("/api/notifications")
 async def api_notifications():
     return {"ok": True, "notifications": _load_json(NOTIF_FILE, [])}
+
+
+
+ANALYTICS_FILE = DATA_DIR / "analytics.jsonl"
+
+
+class AnalyticsEvent(BaseModel):
+    type: str = Field(..., min_length=1)  # pageview | webvital | error
+    path: str | None = None
+    name: str | None = None
+    value: float | None = None
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/api/analytics/collect")
+async def analytics_collect(body: AnalyticsEvent):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    line = json.dumps({"at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), **body.model_dump()})
+    with ANALYTICS_FILE.open("a") as f:
+        f.write(line + "\n")
+    return {"ok": True}
+
+
+@app.get("/api/analytics/summary")
+async def analytics_summary(limit: int = 200):
+    if not ANALYTICS_FILE.exists():
+        return {"ok": True, "events": [], "counts": {}}
+    lines = ANALYTICS_FILE.read_text().splitlines()[-max(1, min(limit, 2000)):]
+    events = []
+    counts: dict[str, int] = {}
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        events.append(ev)
+        t = str(ev.get("type") or "unknown")
+        counts[t] = counts.get(t, 0) + 1
+    return {"ok": True, "events": events[-100:], "counts": counts}
 
 
 @app.get("/")
