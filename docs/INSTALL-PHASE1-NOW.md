@@ -1,7 +1,7 @@
 # Install Phase 1 now (Market UI — no olares-cli profile)
 
 Charts ready under `/workspace/olares-site-platform/dist/` after `gh release download`,
-or from https://github.com/wooj-commits/olares-site-platform/releases/tag/v0.1.5
+or from https://github.com/wooj-commits/olares-site-platform/releases/tag/v0.1.6
 (and the next v0.1.6 release once CI finishes for metrics bump).
 
 ## A. Allowlist (required for Site Console CLI)
@@ -17,8 +17,8 @@ Then restart **`app-service`** and **`market-deployment`** in `os-framework`. Do
 ## B. Market Upload / Install / Update
 
 1. Desktop → Market → My Olares → Upload custom app package.
-2. Upload **`siteconsole-0.1.0.tgz`** (or `0.1.1` after next release) → **Install** (private, admin-only).
-3. Upload **`olaresdemo-0.1.5.tgz`** (or `0.1.6`) → choose **Update** on the already-installed Olares Demo (do not uninstall).
+2. Upload **`siteconsole-0.1.1.tgz`**  → **Install** (private, admin-only).
+3. Upload **`olaresdemo-0.1.6.tgz`**  → choose **Update** on the already-installed Olares Demo (do not uninstall).
 4. Wait until both show Running.
 
 ## C. Verify
