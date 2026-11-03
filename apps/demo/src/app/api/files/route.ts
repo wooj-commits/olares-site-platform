@@ -10,7 +10,6 @@ import {
   ListObjectsV2Command,
   GetObjectCommand,
   DeleteObjectCommand,
-  getSignedUrl,
 } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
@@ -36,10 +35,22 @@ export async function GET(req: NextRequest) {
     if (!key.startsWith(`${user.id}/`)) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-    const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket, Key: key }), {
-      expiresIn: 300,
+    // Stream through the app — MinIO is cluster-internal (minio:9000), so
+    // presigned URLs are not reachable from browsers outside the mesh.
+    const obj = await s3.send(new GetObjectCommand({ Bucket, Key: key }));
+    const body = obj.Body;
+    if (!body) return NextResponse.json({ error: "empty object" }, { status: 404 });
+    const bytes = Buffer.from(await body.transformToByteArray());
+    const filename = key.split("/").pop() || "download.bin";
+    return new NextResponse(bytes, {
+      status: 200,
+      headers: {
+        "content-type": obj.ContentType || "application/octet-stream",
+        "content-length": String(bytes.length),
+        "content-disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+        "cache-control": "private, no-store",
+      },
     });
-    return NextResponse.json({ url });
   }
   const listed = await s3.send(
     new ListObjectsV2Command({ Bucket, Prefix: `${user.id}/`, MaxKeys: 100 }),

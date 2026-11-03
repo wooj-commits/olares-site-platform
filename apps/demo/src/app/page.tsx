@@ -143,8 +143,15 @@ export default function HomePage() {
       setError(await res.text());
       return;
     }
-    const j = await res.json();
-    window.open(j.url, "_blank");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = key.split("/").pop() || "download.bin";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   if (loading) return <p className="sub">Loading…</p>;
