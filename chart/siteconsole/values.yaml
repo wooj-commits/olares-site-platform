@@ -1,0 +1,28 @@
+image:
+  repository: ghcr.io/wooj-commits/olares-site-console
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+workloads:
+  siteconsole:
+    replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+env:
+  LOG_LEVEL: "INFO"
+  SITECONSOLE_DATA_DIR: "/app/data"
+  WATCH_TIMEOUT: "20m"
+  OLARES_ID: "woojinc1205"
+  GH_OWNER: "wooj-commits"
+  GH_REPO: "olares-site-platform"
+  # Optional comma filter; empty = all Market --mine apps
+  MANAGED_APPS: ""
+  # Optional Slack/Discord webhook for deploy notifications
+  NOTIFY_WEBHOOK_URL: ""

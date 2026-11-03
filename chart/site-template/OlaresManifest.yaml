@@ -80,3 +80,10 @@ envs:
   applyOnChange: true
   default: ""
   description: Optional public HTTPS base URL override (auth-capable apps).
+- envName: REDIRECT_RULES_JSON
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: "[]"
+  description: JSON array of {from_path,to_url,status} redirect rules (Site Console).

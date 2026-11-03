@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Olares Site Console</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#0b1220; --panel:#121a2b; --card:#182338; --border:#2a3a55;
+  --text:#e8eef8; --muted:#8b9bb4; --accent:#5b8def; --ok:#3dd68c;
+  --warn:#f5a524; --err:#f31260; --chip:#243352;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--accent)}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:#0e1626;position:sticky;top:0;z-index:10}
+header h1{font-size:1.1rem;margin:0;font-weight:700}
+header .meta{color:var(--muted);font-size:.85rem}
+.layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 58px)}
+nav{border-right:1px solid var(--border);padding:12px;background:#0e1626}
+nav button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--muted);padding:10px 12px;border-radius:8px;cursor:pointer;font-size:.95rem;margin-bottom:4px}
+nav button.active,nav button:hover{background:var(--card);color:var(--text)}
+main{padding:18px 20px 40px;overflow:auto}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.muted{color:var(--muted)}
+.err{color:var(--err);white-space:pre-wrap;word-break:break-word}
+.ok{color:var(--ok)}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em}
+button.btn,label.btn{appearance:none;border:1px solid var(--border);background:var(--chip);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.88rem;cursor:pointer}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.btn.danger{background:#3a1520;border-color:#6b2135;color:#ffb4c6}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{background:#0f1728;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:.9rem;width:100%}
+textarea{min-height:90px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem}
+label.field{display:block;margin-bottom:10px;font-size:.85rem;color:var(--muted)}
+label.field > span{display:block;margin-bottom:4px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:600;background:var(--chip)}
+.pill.run{background:#143528;color:#8ce99a}
+.pill.stop{background:#3a1520;color:#ffb4c6}
+.pill.busy{background:#3b2f0b;color:#ffe066}
+.pill.unk{background:#243044;color:#adb5bd}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.nav-row{display:flex;gap:6px;overflow:auto}.grid2{grid-template-columns:1fr}}
+pre.log{background:#0a101c;border:1px solid var(--border);border-radius:8px;padding:10px;max-height:360px;overflow:auto;font-size:.75rem;color:#c5d0e0;white-space:pre-wrap}
+.hidden{display:none!important}
+.banner{padding:10px 12px;border-radius:8px;background:#1c2a14;border:1px solid #2f4a22;color:#b2f2bb;margin-bottom:12px;font-size:.9rem}
+.banner.warn{background:#2a220e;border-color:#5c4814;color:#ffec99}
+.banner.err{background:#2a1218;border-color:#5c2130;color:#ffc9c9}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Olares Site Console</h1>
+    <div class="meta" id="hdr-meta">Loading…</div>
+  </div>
+  <div class="row">
+    <span class="pill" id="busy-pill">idle</span>
+    <button class="btn" id="btn-refresh" type="button">Refresh</button>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav" class="nav-row">
+    <button type="button" data-view="sites" class="active">Sites</button>
+    <button type="button" data-view="deploy">Deploy / Rollback</button>
+    <button type="button" data-view="env">Env vars</button>
+    <button type="button" data-view="domains">Domains & DNS</button>
+    <button type="button" data-view="redirects">Redirects</button>
+    <button type="button" data-view="logs">Logs</button>
+    <button type="button" data-view="history">History</button>
+  </nav>
+  <main>
+    <div id="flash" class="hidden"></div>
+
+    <section id="view-sites">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <strong>Installed apps</strong>
+          <button class="btn" type="button" id="btn-reload-apps">Reload</button>
+        </div>
+        <table>
+          <thead><tr><th>App</th><th>State</th><th>Version</th><th>Actions</th></tr></thead>
+          <tbody id="apps-body"><tr><td colspan="4" class="muted">…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <strong>Managed registry</strong>
+        <p class="muted" style="margin:6px 0 10px">Optional allow-list of app names this console focuses on. Empty = show all Market “mine” apps.</p>
+        <label class="field"><span>Comma-separated app names</span>
+          <input id="registry-input" placeholder="olaresdemo,fastapihello"/>
+        </label>
+        <button class="btn primary" type="button" id="btn-save-registry">Save registry</button>
+      </div>
+    </section>
+
+    <section id="view-deploy" class="hidden">
+      <div class="card">
+        <div class="grid2">
+          <label class="field"><span>App name</span>
+            <input id="deploy-app" placeholder="olaresdemo"/>
+          </label>
+          <label class="field"><span>Action</span>
+            <select id="deploy-action"><option value="upgrade">Upgrade (redeploy / rollback)</option><option value="install">Install new</option></select>
+          </label>
+          <label class="field"><span>GitHub release tag</span>
+            <select id="deploy-tag"></select>
+          </label>
+          <label class="field"><span>Chart asset</span>
+            <select id="deploy-asset"></select>
+          </label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary" type="button" id="btn-deploy">Upload chart & apply</button>
+          <button class="btn" type="button" id="btn-load-releases">Reload releases</button>
+        </div>
+        <p class="muted" style="margin-top:10px">Builds stay on GitHub Actions. Console downloads the chart <code>.tgz</code>, runs <code>market upload</code>, then <code>upgrade/install -s upload --watch</code>. Same-version re-upload is allowed for upload source (rollback = older tag).</p>
+      </div>
+      <div class="card">
+        <strong>Releases</strong>
+        <div id="releases-list" class="muted" style="margin-top:8px">…</div>
+      </div>
+    </section>
+
+    <section id="view-env" class="hidden">
+      <div class="card">
+        <div class="row" style="margin-bottom:10px">
+          <label class="field" style="flex:1;margin:0"><span>App</span>
+            <input id="env-app" placeholder="olaresdemo"/>
+          </label>
+          <button class="btn" type="button" id="btn-env-load" style="margin-top:18px">Load env</button>
+        </div>
+        <div id="env-table" class="muted">Pick an app and load.</div>
+        <div style="margin-top:12px">
+          <label class="field"><span>Set variables (KEY=VALUE per line)</span>
+            <textarea id="env-set" placeholder="BETTER_AUTH_URL=&#10;REDIRECT_RULES_JSON=[]"></textarea>
+          </label>
+          <button class="btn primary" type="button" id="btn-env-save">Apply changes</button>
+          <p class="muted">Only vars declared <code>editable: true</code> in the chart’s OlaresManifest can change. Password fields may be masked. Apply can restart the app.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-domains" class="hidden">
+      <div class="banner warn">Third-level <code>*.olares.com</code> routes are instant and reliable. Custom third-party domains need CNAME + cert and are verified after Finish — Tunnel custom domains can fail (known: vault.woojincho.com). Squarespace has no DNS API; paste the records shown.</div>
+      <div class="card">
+        <div class="grid2">
+          <label class="field"><span>App</span><input id="dom-app" placeholder="olaresdemo"/></label>
+          <label class="field"><span>Entrance</span><input id="dom-entrance" placeholder="web"/></label>
+        </div>
+        <div class="row">
+          <button class="btn" type="button" id="btn-dom-list">List domains</button>
+          <button class="btn" type="button" id="btn-dom-get">Get setup</button>
+        </div>
+        <pre class="log" id="dom-out" style="margin-top:10px"></pre>
+      </div>
+      <div class="card">
+        <strong>Set memorable third-level</strong>
+        <label class="field"><span>Prefix (e.g. demo → demo.woojinc1205.olares.com)</span>
+          <input id="dom-third-level" placeholder="demo"/>
+        </label>
+        <button class="btn primary" type="button" id="btn-dom-third">Set third-level</button>
+      </div>
+      <div class="card">
+        <strong>Custom domain wizard</strong>
+        <label class="field"><span>FQDN</span><input id="dom-fqdn" placeholder="app.example.com"/></label>
+        <label class="field"><span>TLS cert PEM (full chain)</span><input id="dom-cert" type="file" accept=".pem,.crt,.cer,text/*"/></label>
+        <label class="field"><span>TLS key PEM (RSA)</span><input id="dom-key" type="file" accept=".pem,.key,text/*"/></label>
+        <div class="row">
+          <button class="btn primary" type="button" id="btn-dom-party">Set third-party + show DNS</button>
+          <button class="btn" type="button" id="btn-dom-finish">Finish (after DNS)</button>
+        </div>
+        <div id="dns-help" style="margin-top:12px"></div>
+      </div>
+    </section>
+
+    <section id="view-redirects" class="hidden">
+      <div class="card">
+        <label class="field"><span>App</span><input id="redir-app" placeholder="olaresdemo"/></label>
+        <label class="field"><span>Rules JSON array</span>
+          <textarea id="redir-json" placeholder='[{"from_path":"/old","to_url":"https://example.com/new","status":301}]'></textarea>
+        </label>
+        <div class="row">
+          <button class="btn" type="button" id="btn-redir-load">Load</button>
+          <button class="btn primary" type="button" id="btn-redir-save">Save & push env</button>
+        </div>
+        <p class="muted">Saved in the console and pushed as <code>REDIRECT_RULES_JSON</code> (app must declare that editable env and honor it in middleware).</p>
+      </div>
+    </section>
+
+    <section id="view-logs" class="hidden">
+      <div class="card">
+        <div class="row">
+          <label class="field" style="flex:1;margin:0"><span>App</span><input id="logs-app" placeholder="olaresdemo"/></label>
+          <label class="field" style="width:120px;margin:0"><span>Tail</span><input id="logs-tail" type="number" value="200"/></label>
+          <button class="btn primary" type="button" id="btn-logs" style="margin-top:18px">Fetch logs</button>
+        </div>
+        <pre class="log" id="logs-out" style="margin-top:10px"></pre>
+      </div>
+    </section>
+
+    <section id="view-history" class="hidden">
+      <div class="card">
+        <strong>Deploy history</strong>
+        <table style="margin-top:8px">
+          <thead><tr><th>When</th><th>App</th><th>Action</th><th>Tag</th><th>Result</th></tr></thead>
+          <tbody id="hist-body"><tr><td colspan="5" class="muted">…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <strong>CLI log (recent)</strong>
+        <pre class="log" id="cli-log"></pre>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let releases = [];
+let selectedApp = '';
+
+function flash(msg, kind='ok') {
+  const el = $('flash');
+  el.className = 'banner ' + (kind === 'ok' ? '' : kind === 'warn' ? 'warn' : 'err');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 8000);
+}
+
+function pillState(state) {
+  const s = (state||'').toLowerCase();
+  if (s.includes('run')) return `<span class="pill run">${state}</span>`;
+  if (s.includes('stop') || s.includes('suspend')) return `<span class="pill stop">${state}</span>`;
+  return `<span class="pill unk">${state||'?'}</span>`;
+}
+
+function showView(name) {
+  document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+  const v = document.getElementById('view-' + name);
+  if (v) v.classList.remove('hidden');
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+}
+
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+
+async function api(path, opts={}) {
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch { data = { ok:false, error: await r.text() }; }
+  if (!r.ok && data && data.error) throw new Error(data.error);
+  if (!r.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+function setSelected(name) {
+  selectedApp = name;
+  ['deploy-app','env-app','dom-app','redir-app','logs-app'].forEach(id => { if ($(id)) $(id).value = name; });
+}
+
+async function loadConfig() {
+  const c = await api('/api/config');
+  $('hdr-meta').textContent = `${c.olares_id} · GitHub ${c.gh_owner}/${c.gh_repo}` + (c.busy ? ` · busy: ${c.busy_msg}` : '');
+  $('busy-pill').textContent = c.busy ? 'busy' : 'idle';
+  $('busy-pill').className = 'pill ' + (c.busy ? 'busy' : 'run');
+}
+
+async function loadApps() {
+  const data = await api('/api/apps');
+  const body = $('apps-body');
+  if (!data.apps?.length) {
+    body.innerHTML = '<tr><td colspan="4" class="muted">No apps (or CLI not allowlisted yet)</td></tr>';
+    return;
+  }
+  body.innerHTML = data.apps.map(a => `<tr>
+    <td><strong>${a.name}</strong><div class="muted">${a.title||''}</div></td>
+    <td>${pillState(a.state)}</td>
+    <td class="muted">${a.version||'—'}</td>
+    <td class="row">
+      <button class="btn" data-sel="${a.name}">Select</button>
+      <button class="btn" data-resume="${a.name}">Resume</button>
+      <button class="btn danger" data-stop="${a.name}">Stop</button>
+    </td></tr>`).join('');
+  body.querySelectorAll('[data-sel]').forEach(b => b.onclick = () => { setSelected(b.dataset.sel); flash('Selected '+b.dataset.sel); });
+  body.querySelectorAll('[data-stop]').forEach(b => b.onclick = async () => {
+    if (!confirm('Stop '+b.dataset.stop+'?')) return;
+    try { await api('/api/apps/'+encodeURIComponent(b.dataset.stop)+'/stop', {method:'POST'}); flash('Stopped '+b.dataset.stop); loadApps(); }
+    catch(e){ flash(String(e.message||e),'err'); }
+  });
+  body.querySelectorAll('[data-resume]').forEach(b => b.onclick = async () => {
+    try { await api('/api/apps/'+encodeURIComponent(b.dataset.resume)+'/resume', {method:'POST'}); flash('Resumed '+b.dataset.resume); loadApps(); }
+    catch(e){ flash(String(e.message||e),'err'); }
+  });
+}
+
+async function loadRegistry() {
+  const d = await api('/api/registry');
+  $('registry-input').value = (d.apps||[]).join(',');
+}
+
+$('btn-save-registry').onclick = async () => {
+  const apps = $('registry-input').value.split(',').map(s=>s.trim()).filter(Boolean);
+  await api('/api/registry', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({apps})});
+  flash('Registry saved (in-console filter). Env MANAGED_APPS overrides if set.');
+  loadApps();
+};
+
+async function loadReleases() {
+  const d = await api('/api/releases');
+  releases = d.releases || [];
+  const tagSel = $('deploy-tag');
+  tagSel.innerHTML = releases.map(r => `<option value="${r.tag}">${r.tag}${r.prerelease?' (pre)':''}</option>`).join('') || '<option value="">(none)</option>';
+  $('releases-list').innerHTML = releases.map(r =>
+    `<div style="margin-bottom:8px"><strong>${r.tag}</strong> <span class="muted">${r.published_at||''}</span><div class="muted">${(r.assets||[]).map(a=>a.name).join(', ')||'no charts'}</div></div>`
+  ).join('') || 'No releases';
+  fillAssets();
+}
+function fillAssets() {
+  const tag = $('deploy-tag').value;
+  const rel = releases.find(r => r.tag === tag);
+  const assets = rel?.assets || [];
+  $('deploy-asset').innerHTML = assets.map(a => `<option value="${a.name}">${a.name}</option>`).join('') || '<option value="">(auto)</option>';
+}
+$('deploy-tag').onchange = fillAssets;
+
+$('btn-deploy').onclick = async () => {
+  const body = {
+    app: $('deploy-app').value.trim(),
+    tag: $('deploy-tag').value,
+    asset: $('deploy-asset').value || null,
+    action: $('deploy-action').value,
+  };
+  if (!body.app || !body.tag) return flash('App and tag required','warn');
+  if (!confirm(`${body.action} ${body.app} from ${body.tag} / ${body.asset||'auto'}?`)) return;
+  flash('Deploy started — this can take several minutes…','warn');
+  try {
+    const d = await api('/api/deploy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    flash(`OK ${d.action} ${d.app} (${d.elapsed_s}s)`);
+    loadApps(); loadHistory();
+  } catch(e) { flash(String(e.message||e),'err'); }
+};
+
+$('btn-env-load').onclick = async () => {
+  const name = $('env-app').value.trim();
+  if (!name) return;
+  try {
+    const d = await api('/api/apps/'+encodeURIComponent(name)+'/env');
+    const env = d.env;
+    let rows = [];
+    if (Array.isArray(env)) rows = env;
+    else if (env?.items) rows = env.items;
+    else if (env && typeof env === 'object') rows = Object.entries(env).map(([envName,v]) => ({envName, value: typeof v==='object'?v.value:v, editable: true}));
+    $('env-table').innerHTML = `<table><thead><tr><th>Name</th><th>Value</th><th>Editable</th></tr></thead><tbody>${
+      rows.map(r => `<tr><td><code>${r.envName||r.name||''}</code></td><td class="muted">${r.value ?? r.Value ?? '—'}</td><td>${r.editable===false?'no':'yes'}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">empty</td></tr>'
+    }</tbody></table>`;
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+
+$('btn-env-save').onclick = async () => {
+  const name = $('env-app').value.trim();
+  const vars = {};
+  for (const line of $('env-set').value.split('\n')) {
+    const t = line.trim(); if (!t || t.startsWith('#')) continue;
+    const i = t.indexOf('='); if (i<1) continue;
+    vars[t.slice(0,i)] = t.slice(i+1);
+  }
+  if (!Object.keys(vars).length) return flash('No KEY=VALUE lines','warn');
+  try {
+    await api('/api/apps/'+encodeURIComponent(name)+'/env', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({vars})});
+    flash('Env updated: '+Object.keys(vars).join(', '));
+    $('btn-env-load').click();
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+
+function setDomOut(obj){ $('dom-out').textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2); }
+
+$('btn-dom-list').onclick = async () => {
+  try { setDomOut(await api('/api/apps/'+encodeURIComponent($('dom-app').value.trim())+'/domains')); }
+  catch(e){ flash(String(e.message||e),'err'); }
+};
+$('btn-dom-get').onclick = async () => {
+  try {
+    const app=$('dom-app').value.trim(), ent=$('dom-entrance').value.trim();
+    setDomOut(await api(`/api/apps/${encodeURIComponent(app)}/domains/${encodeURIComponent(ent)}`));
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+$('btn-dom-third').onclick = async () => {
+  try {
+    const app=$('dom-app').value.trim(), ent=$('dom-entrance').value.trim();
+    const d = await api(`/api/apps/${encodeURIComponent(app)}/domains/${encodeURIComponent(ent)}/third-level`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({third_level:$('dom-third-level').value.trim()})
+    });
+    flash(d.hint || 'Third-level set'); setDomOut(d);
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+$('btn-dom-party').onclick = async () => {
+  const app=$('dom-app').value.trim(), ent=$('dom-entrance').value.trim();
+  const fd = new FormData();
+  fd.append('third_party', $('dom-fqdn').value.trim());
+  const cert = $('dom-cert').files[0], key=$('dom-key').files[0];
+  if (!cert || !key) return flash('Cert and key files required','warn');
+  fd.append('cert_file', cert); fd.append('key_file', key);
+  try {
+    const r = await fetch(`/api/apps/${encodeURIComponent(app)}/domains/${encodeURIComponent(ent)}/third-party`, {method:'POST', body: fd});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error||JSON.stringify(d));
+    setDomOut(d);
+    const help = d.dns_instructions;
+    if (help) {
+      $('dns-help').innerHTML = `<div class="banner warn">${help.warning||''}</div>
+        <p><strong>CNAME target:</strong> <code>${help.cname_target}</code></p>
+        <p><strong>Squarespace</strong> — Domains → DNS → Add record:</p>
+        <ul>${(help.squarespace||[]).map(x=>`<li><code>${x.type}</code> host <code>${x.host_ui||x.host}</code> → <code>${x.data}</code> — ${x.note||''}</li>`).join('')}</ul>
+        <p><strong>Google Domains / other</strong>:</p>
+        <ul>${(help.google_domains||[]).map(x=>`<li><code>${x.type}</code> host <code>${x.host}</code> → <code>${x.data}</code></li>`).join('')}</ul>
+        <p>After DNS propagates, click <strong>Finish</strong>.</p>`;
+    }
+    flash('Third-party set — paste DNS then Finish');
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+$('btn-dom-finish').onclick = async () => {
+  try {
+    const app=$('dom-app').value.trim(), ent=$('dom-entrance').value.trim();
+    setDomOut(await api(`/api/apps/${encodeURIComponent(app)}/domains/${encodeURIComponent(ent)}/finish`, {method:'POST'}));
+    flash('Finish submitted — poll Get setup until cname_status=active');
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+
+$('btn-redir-load').onclick = async () => {
+  const d = await api('/api/redirects/'+encodeURIComponent($('redir-app').value.trim()));
+  $('redir-json').value = JSON.stringify(d.rules||[], null, 2);
+};
+$('btn-redir-save').onclick = async () => {
+  let rules;
+  try { rules = JSON.parse($('redir-json').value || '[]'); } catch { return flash('Invalid JSON','err'); }
+  try {
+    await api('/api/redirects/'+encodeURIComponent($('redir-app').value.trim()), {
+      method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rules, apply:true})
+    });
+    flash('Redirects saved & env pushed');
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+
+$('btn-logs').onclick = async () => {
+  try {
+    const app=$('logs-app').value.trim();
+    const tail=$('logs-tail').value||200;
+    const d = await api(`/api/apps/${encodeURIComponent(app)}/logs?tail=${tail}`);
+    $('logs-out').textContent = `pod ${d.namespace}/${d.pod}\n\n` + (d.logs||'');
+  } catch(e){ flash(String(e.message||e),'err'); $('logs-out').textContent = String(e.message||e); }
+};
+
+async function loadHistory() {
+  const d = await api('/api/history');
+  const rows = d.history||[];
+  $('hist-body').innerHTML = rows.map(h => `<tr>
+    <td class="muted">${h.at||''}</td><td>${h.app||''}</td><td>${h.action||''}</td>
+    <td>${h.tag||''}</td><td class="${h.ok?'ok':'err'}">${h.ok?'ok':(h.error||'fail')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">empty</td></tr>';
+  try {
+    const s = await api('/api/status');
+    $('cli-log').textContent = (s.recent_log||[]).join('\n');
+  } catch {}
+}
+
+async function refreshAll() {
+  await loadConfig();
+  await Promise.all([loadApps(), loadRegistry(), loadReleases().catch(()=>{}), loadHistory()]);
+}
+
+$('btn-refresh').onclick = refreshAll;
+$('btn-reload-apps').onclick = loadApps;
+$('btn-load-releases').onclick = loadReleases;
+refreshAll().catch(e => flash(String(e.message||e),'err'));
+setInterval(() => { loadConfig().catch(()=>{}); }, 8000);
+</script>
+</body>
+</html>

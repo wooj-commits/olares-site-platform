@@ -1,0 +1,117 @@
+olaresManifest.version: '0.12.0'
+olaresManifest.type: app
+apiVersion: 'v3'
+
+metadata:
+  name: siteconsole
+  appid: siteconsole
+  title: Site Console
+  description: Manage Olares sites — deploy, env, domains, redirects, logs (Dokploy-like)
+  icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
+  version: 0.1.0
+  categories:
+  - Developer Tools
+  - Utilities_v112
+
+entrances:
+- name: siteconsole
+  host: siteconsole
+  port: 8080
+  title: Site Console
+  icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
+  authLevel: private
+  visible: true
+  openMethod: window
+
+permission:
+  appData: true
+  # Standing CLI credential as the installing user (allowlist required).
+  loginOlaresCLI: true
+
+spec:
+  versionName: '0.1.0'
+  fullDescription: |
+    Private admin console for managing sites on this Olares (woojinc1205).
+
+    Lists Market apps, stop/resume, deploy/rollback from GitHub release chart
+    tarballs, edit declared env vars, set memorable *.olares.com domains and
+    guide custom-domain DNS (Squarespace/Google — paste only), manage redirect
+    rules via REDIRECT_RULES_JSON, and view pod logs.
+
+    Requires ConfigMap os-framework/login-olares-cli-allow-list to include
+    siteconsole (keep lares,modeswitch), then restart app-service and
+    market-deployment. See docs/site-console.md.
+  developer: woojinc1205
+  website: https://github.com/wooj-commits/olares-site-platform
+  sourceCode: https://github.com/wooj-commits/olares-site-platform
+  submitter: woojinc1205
+  doc: https://github.com/wooj-commits/olares-site-platform/blob/main/docs/site-console.md
+  locale:
+  - en-US
+  license:
+  - text: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  supportArch:
+  - amd64
+  onlyAdmin: true
+  accelerator:
+  - mode: cpu
+    requiredCpu: 100m
+    limitedCpu: "1"
+    requiredMemory: 256Mi
+    limitedMemory: 512Mi
+    requiredDisk: 128Mi
+    limitedDisk: 5Gi
+
+options:
+  apiTimeout: 0
+  dependencies:
+  - name: olares
+    type: system
+    version: '>=1.12.7-0'
+
+workloadReplicas:
+  siteconsole: 1
+
+envs:
+- envName: GH_OWNER
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: "wooj-commits"
+  description: GitHub org/user for chart releases
+- envName: GH_REPO
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: "olares-site-platform"
+  description: GitHub repo that publishes chart .tgz releases
+- envName: MANAGED_APPS
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: ""
+  description: Optional comma-separated Market app names to show (empty = all)
+- envName: NOTIFY_WEBHOOK_URL
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: ""
+  description: Optional Slack/Discord webhook for deploy success/failure
+- envName: GITHUB_TOKEN
+  required: false
+  type: password
+  editable: true
+  applyOnChange: true
+  description: Optional GitHub token for higher API rate limits (public repo works without)
+- envName: OLARES_ID
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: "woojinc1205"
+  description: Olares ID used in DNS helper text

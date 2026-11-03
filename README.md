@@ -42,3 +42,12 @@ When CI passes on main for wooj-commits/olares-site-platform, non-destructively 
 ## License
 
 Apache-2.0
+
+## Site Console
+
+Dokploy-like private admin UI for this Olares: list/stop/resume sites, deploy from GitHub release charts, edit env vars, domain wizard (third-level + guided custom DNS), redirects, logs.
+
+- App: `apps/siteconsole` · Chart: `chart/siteconsole`
+- Docs: [`docs/site-console.md`](docs/site-console.md) · Allowlist: [`docs/site-console-admin-steps.md`](docs/site-console-admin-steps.md)
+- Image: `ghcr.io/wooj-commits/olares-site-console`
+

@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: siteconsole
+  namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: siteconsole
+spec:
+  replicas: {{ .Values.workloads.siteconsole.replicaCount }}
+  selector:
+    matchLabels:
+      app: siteconsole
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: siteconsole
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+      - name: init-permissions
+        image: docker.io/beclab/aboveos-busybox:1.37.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        command:
+        - sh
+        - -ec
+        - |
+          mkdir -p /app/data
+          chown -R 1000:1000 /app/data
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+      containers:
+      - name: siteconsole
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        {{- $oe := .Values.olaresEnv | default dict }}
+        - name: LOG_LEVEL
+          value: {{ .Values.env.LOG_LEVEL | quote }}
+        - name: SITECONSOLE_DATA_DIR
+          value: {{ .Values.env.SITECONSOLE_DATA_DIR | quote }}
+        - name: WATCH_TIMEOUT
+          value: {{ .Values.env.WATCH_TIMEOUT | quote }}
+        - name: OLARES_CLI
+          value: /usr/local/bin/olares-cli
+        - name: OLARES_ID
+          value: {{ index $oe "OLARES_ID" | default .Values.env.OLARES_ID | quote }}
+        - name: GH_OWNER
+          value: {{ index $oe "GH_OWNER" | default .Values.env.GH_OWNER | quote }}
+        - name: GH_REPO
+          value: {{ index $oe "GH_REPO" | default .Values.env.GH_REPO | quote }}
+        - name: MANAGED_APPS
+          value: {{ index $oe "MANAGED_APPS" | default .Values.env.MANAGED_APPS | quote }}
+        - name: NOTIFY_WEBHOOK_URL
+          value: {{ index $oe "NOTIFY_WEBHOOK_URL" | default .Values.env.NOTIFY_WEBHOOK_URL | quote }}
+        {{- if index $oe "GITHUB_TOKEN" }}
+        - name: GITHUB_TOKEN
+          value: {{ index $oe "GITHUB_TOKEN" | quote }}
+        {{- end }}
+        resources:
+          requests:
+            cpu: {{ .Values.resources.requests.cpu | quote }}
+            memory: {{ .Values.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.resources.limits.cpu | quote }}
+            memory: {{ .Values.resources.limits.memory | quote }}
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+      volumes:
+      - name: data
+        hostPath:
+          path: '{{ .Values.userspace.appData }}/siteconsole'
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: siteconsole
+  namespace: '{{ .Release.Namespace }}'
+spec:
+  selector:
+    app: siteconsole
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080

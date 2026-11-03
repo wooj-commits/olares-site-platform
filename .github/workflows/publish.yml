@@ -25,10 +25,15 @@ jobs:
           - name: olares-site-platform
             context: .
             dockerfile: Dockerfile
-            # root Dockerfile builds apps/demo (Next.js)
+            version_file: chart/olaresdemo/Chart.yaml
           - name: olares-site-platform-fastapi
             context: apps/fastapi-hello
             dockerfile: Dockerfile
+            version_file: chart/fastapihello/Chart.yaml
+          - name: olares-site-console
+            context: apps/siteconsole
+            dockerfile: Dockerfile
+            version_file: chart/siteconsole/Chart.yaml
     steps:
       - uses: actions/checkout@v4
 
@@ -48,12 +53,11 @@ jobs:
             echo "mode=nixpacks" >> "$GITHUB_OUTPUT"
             echo "dockerfile=" >> "$GITHUB_OUTPUT"
           fi
-          echo "Resolved mode=$(grep mode "$GITHUB_OUTPUT" | cut -d= -f2)"
 
       - name: Version
         id: meta
         run: |
-          V=$(awk '/^version:/{print $2; exit}' chart/olaresdemo/Chart.yaml)
+          V=$(awk '/^version:/{print $2; exit}' "${{ matrix.version_file }}")
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
@@ -105,7 +109,6 @@ jobs:
           BP_IMAGE: ghcr.io/wooj-commits/${{ matrix.name }}:${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
-          # Cloud Native Buildpacks via pack CLI
           (curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.36.4/pack-v0.36.4-linux.tgz" | sudo tar -C /usr/local/bin -xz pack) || true
           pack build "$BP_IMAGE" --path "${{ matrix.context }}" --builder paketobuildpacks/builder-jammy-base --publish
           docker pull "$BP_IMAGE"
@@ -133,12 +136,16 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq python3-yaml
           python3 scripts/validate-olares-resources.py chart/olaresdemo
           python3 scripts/validate-olares-resources.py chart/fastapihello
+          python3 scripts/validate-olares-resources.py chart/siteconsole
 
       - name: Version
         id: meta
         run: |
+          # Platform release tag tracks olaresdemo; siteconsole also attached
           V=$(awk '/^version:/{print $2; exit}' chart/olaresdemo/Chart.yaml)
+          SC=$(awk '/^version:/{print $2; exit}' chart/siteconsole/Chart.yaml)
           echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "siteconsole=$SC" >> "$GITHUB_OUTPUT"
 
       - name: Install helm
         uses: azure/setup-helm@v4
@@ -148,6 +155,7 @@ jobs:
           mkdir -p dist
           helm package chart/olaresdemo -d dist
           helm package chart/fastapihello -d dist
+          helm package chart/siteconsole -d dist
           ls -la dist
 
       - name: Upload chart artifacts
@@ -163,5 +171,7 @@ jobs:
           name: v${{ steps.meta.outputs.version }}
           files: dist/*.tgz
           generate_release_notes: true
+          body: |
+            Includes siteconsole-${{ steps.meta.outputs.siteconsole }}.tgz (Site Console).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
