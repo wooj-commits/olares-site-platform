@@ -44,7 +44,7 @@ WEBHOOK_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Olares Site Console", version="0.1.1")
+app = FastAPI(title="Olares Site Console", version="0.1.2")
 app.add_middleware(MetricsMiddleware)
 _lock = asyncio.Lock()
 _busy = False
@@ -267,7 +267,7 @@ async def metrics():
 
 @app.get("/api/health")
 async def api_health():
-    return {"ok": True, "runtime": "siteconsole", "version": "0.1.1"}
+    return {"ok": True, "runtime": "siteconsole", "version": "0.1.2"}
 
 
 @app.get("/api/config")
