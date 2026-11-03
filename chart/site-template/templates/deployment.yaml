@@ -19,6 +19,10 @@ spec:
     metadata:
       labels:
         app: {{ $app }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ $port }}"
+        prometheus.io/path: "/metrics"
     spec:
       automountServiceAccountToken: false
       containers:
@@ -96,6 +100,13 @@ kind: Service
 metadata:
   name: {{ $app }}
   namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: {{ $app }}
+    app.kubernetes.io/name: {{ $app }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "{{ $port }}"
+    prometheus.io/path: "/metrics"
 spec:
   selector:
     app: {{ $app }}

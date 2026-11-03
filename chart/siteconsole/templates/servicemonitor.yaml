@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: siteconsole
+  namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: siteconsole
+    app.kubernetes.io/name: siteconsole
+    app.kubernetes.io/vendor: kubesphere
+spec:
+  selector:
+    matchLabels:
+      app: siteconsole
+  namespaceSelector:
+    matchNames:
+      - '{{ .Release.Namespace }}'
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      scheme: http

@@ -14,6 +14,10 @@ spec:
     metadata:
       labels:
         app: fastapihello
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.port | quote }}
+        prometheus.io/path: "/metrics"
     spec:
       automountServiceAccountToken: false
       containers:
@@ -51,6 +55,13 @@ kind: Service
 metadata:
   name: fastapihello
   namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: fastapihello
+    app.kubernetes.io/name: fastapihello
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "{{ .Values.port }}"
+    prometheus.io/path: "/metrics"
 spec:
   selector:
     app: fastapihello

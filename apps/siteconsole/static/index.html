@@ -73,6 +73,7 @@ pre.log{background:#0a101c;border:1px solid var(--border);border-radius:8px;padd
     <button type="button" data-view="logs">Logs</button>
     <button type="button" data-view="analytics">Analytics</button>
     <button type="button" data-view="wizard">New site</button>
+    <button type="button" data-view="backups">Backups</button>
     <button type="button" data-view="history">History</button>
   </nav>
   <main>
@@ -215,14 +216,38 @@ pre.log{background:#0a101c;border:1px solid var(--border);border-radius:8px;padd
     </section>
     <section id="view-wizard" class="hidden">
       <div class="card">
+        <p class="muted">End-to-end: generate a chart tgz from <code>site-template</code> + a starter, download it, then Market Upload or Deploy.</p>
         <div class="grid2">
           <label class="field"><span>App name</span><input id="wiz-name" placeholder="mysite"/></label>
           <label class="field"><span>Starter</span><select id="wiz-starter"></select></label>
           <label class="field"><span>Title</span><input id="wiz-title" placeholder="My Site"/></label>
           <label class="field"><span>Postgres</span><select id="wiz-pg"><option value="true">yes</option><option value="false">no</option></select></label>
+          <label class="field"><span>Bundled MinIO</span><select id="wiz-storage"><option value="false">no</option><option value="true">yes</option></select></label>
         </div>
-        <button class="btn primary" type="button" id="btn-wiz-plan">Generate plan</button>
+        <div class="row">
+          <button class="btn" type="button" id="btn-wiz-plan">Preview plan</button>
+          <button class="btn primary" type="button" id="btn-wiz-gen">Generate chart tgz</button>
+          <a class="btn hidden" id="wiz-dl" href="#">Download tgz</a>
+        </div>
         <pre class="log" id="wiz-out" style="margin-top:10px"></pre>
+      </div>
+    </section>
+
+    <section id="view-backups" class="hidden">
+      <div class="card">
+        <strong>App backups</strong>
+        <p class="muted">Calls the app <code>POST /api/admin/backup</code> (pg_dump + MinIO tar). Set the same <code>BACKUP_TOKEN</code> on the app (Settings) and here. Never paste tokens into chat.</p>
+        <div class="grid2">
+          <label class="field"><span>App</span><input id="bak-app" placeholder="olaresdemo"/></label>
+          <label class="field"><span>Entrance URL</span><input id="bak-url" placeholder="https://….olares.com"/></label>
+          <label class="field"><span>Backup token</span><input id="bak-token" type="password" placeholder="same as app BACKUP_TOKEN" autocomplete="off"/></label>
+        </div>
+        <div class="row">
+          <button class="btn" type="button" id="btn-bak-save">Save config</button>
+          <button class="btn primary" type="button" id="btn-bak-run">Run backup</button>
+          <button class="btn" type="button" id="btn-bak-refresh">Refresh list</button>
+        </div>
+        <pre class="log" id="bak-out" style="margin-top:10px"></pre>
       </div>
     </section>
 
@@ -523,9 +548,50 @@ async function loadStarters() {
 }
 $('btn-wiz-plan').onclick = async () => {
   try {
-    const body = { app_name: $('wiz-name').value.trim(), starter: $('wiz-starter').value, title: $('wiz-title').value.trim(), postgres: $('wiz-pg').value==='true', storage: false };
+    const body = { app_name: $('wiz-name').value.trim(), starter: $('wiz-starter').value, title: $('wiz-title').value.trim(), postgres: $('wiz-pg').value==='true', storage: $('wiz-storage').value==='true' };
     const d = await api('/api/wizard/plan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     $('wiz-out').textContent = JSON.stringify(d.plan, null, 2);
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+$('btn-wiz-gen').onclick = async () => {
+  try {
+    const body = { app_name: $('wiz-name').value.trim(), starter: $('wiz-starter').value, title: $('wiz-title').value.trim(), postgres: $('wiz-pg').value==='true', storage: $('wiz-storage').value==='true' };
+    if (!body.app_name) return flash('App name required','warn');
+    flash('Generating chart…','warn');
+    const d = await api('/api/wizard/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    $('wiz-out').textContent = JSON.stringify(d, null, 2);
+    const a = $('wiz-dl');
+    a.href = d.download;
+    a.textContent = 'Download ' + d.chart_tgz;
+    a.classList.remove('hidden');
+    flash('Chart ready');
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+async function loadBackups(){
+  try { $('bak-out').textContent = JSON.stringify(await api('/api/backups'), null, 2); }
+  catch(e){ $('bak-out').textContent = String(e.message||e); }
+}
+$('btn-bak-refresh').onclick = loadBackups;
+$('btn-bak-save').onclick = async () => {
+  const name = $('bak-app').value.trim();
+  if (!name) return flash('App required','warn');
+  const apps = {};
+  apps[name] = { entrance_url: $('bak-url').value.trim(), backup_token: $('bak-token').value };
+  try {
+    await api('/api/backups/config', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({apps})});
+    $('bak-token').value = '';
+    flash('Backup config saved');
+    loadBackups();
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+$('btn-bak-run').onclick = async () => {
+  const name = $('bak-app').value.trim() || 'olaresdemo';
+  if (!confirm('Run backup for '+name+'?')) return;
+  try {
+    flash('Backup running…','warn');
+    const d = await api('/api/backups/'+encodeURIComponent(name), {method:'POST'});
+    flash('Backup OK: '+d.file+' ('+d.bytes+' bytes)');
+    loadBackups();
   } catch(e){ flash(String(e.message||e),'err'); }
 };
 const _oldRefresh = refreshAll;
@@ -533,6 +599,7 @@ refreshAll = async function(){
   await _oldRefresh();
   await loadStarters();
   try { await $('btn-analytics-refresh').onclick(); } catch(e){}
+  try { await loadBackups(); } catch(e){}
 };
 
 refreshAll().catch(e => flash(String(e.message||e),'err'));

@@ -18,3 +18,4 @@ __pycache__/
 .venv/
 .venv-ci/
 dist/*.tgz
+apps/siteconsole/wizard-assets/

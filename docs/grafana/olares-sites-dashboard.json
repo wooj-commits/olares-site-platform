@@ -3,25 +3,64 @@
   "uid": "olares-sites",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
+  "description": "App /metrics from site charts (ServiceMonitor + prometheus.io annotations). Latency without a service filter can match kube-apiserver histograms — panels below require scraped site services.",
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "custom",
+        "query": "olaresdemo,fastapihello,siteconsole",
+        "includeAll": true,
+        "multi": true,
+        "current": {"text": "All", "value": "$__all"}
+      }
+    ]
+  },
   "panels": [
     {
       "type": "timeseries",
       "title": "Request rate",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-      "targets": [{"expr": "sum(rate(http_requests_total[5m])) by (path)", "legendFormat": "{{path}}"}]
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=~\"$service\"}[5m])) by (service, path)",
+          "legendFormat": "{{service}} {{path}}"
+        }
+      ]
     },
     {
       "type": "timeseries",
       "title": "Latency (avg)",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-      "targets": [{"expr": "sum(rate(http_request_duration_seconds_sum[5m])) / sum(rate(http_request_duration_seconds_count[5m]))", "legendFormat": "avg"}]
+      "targets": [
+        {
+          "expr": "sum(rate(http_request_duration_seconds_sum{service=~\"$service\"}[5m])) by (service) / sum(rate(http_request_duration_seconds_count{service=~\"$service\"}[5m])) by (service)",
+          "legendFormat": "{{service}}"
+        }
+      ]
     },
     {
       "type": "timeseries",
-      "title": "Errors",
+      "title": "Errors (5xx + http_errors_total)",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-      "targets": [{"expr": "sum(rate(http_errors_total[5m])) by (path)", "legendFormat": "{{path}}"}]
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=~\"$service\",status=~\"5..\"}[5m])) by (service, path) or sum(rate(http_errors_total{service=~\"$service\"}[5m])) by (service, path)",
+          "legendFormat": "{{service}} {{path}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Scraped series (http_requests_total)",
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "count(http_requests_total{service=~\"$service\"}) or vector(0)",
+          "legendFormat": "series"
+        }
+      ]
     }
   ]
 }

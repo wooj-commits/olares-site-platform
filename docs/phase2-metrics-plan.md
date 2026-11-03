@@ -23,3 +23,7 @@ Self-hosted page views / web vitals / JS errors via a light collector endpoint o
 ## Notifications
 
 `NOTIFY_WEBHOOK_URL` already on siteconsole; Phase 2 adds email option and richer deploy history UI.
+
+## Scrape (implemented)
+
+See `docs/phase2-scrape.md`. Charts ship ServiceMonitor (`app.kubernetes.io/vendor: kubesphere`) + `prometheus.io/*` annotations. Dashboard filters by `service`.

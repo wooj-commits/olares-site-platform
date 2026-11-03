@@ -1,0 +1,23 @@
+{{- $app := "SITE_NAME" -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $app }}
+  namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: {{ $app }}
+    app.kubernetes.io/name: {{ $app }}
+    app.kubernetes.io/vendor: kubesphere
+spec:
+  selector:
+    matchLabels:
+      app: {{ $app }}
+  namespaceSelector:
+    matchNames:
+      - '{{ .Release.Namespace }}'
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      scheme: http

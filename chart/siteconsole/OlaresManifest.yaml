@@ -8,7 +8,7 @@ metadata:
   title: Site Console
   description: Manage Olares sites — deploy, env, domains, redirects, logs (Dokploy-like)
   icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
-  version: 0.1.4
+  version: 0.1.5
   categories:
   - Developer Tools
   - Utilities_v112
@@ -29,14 +29,15 @@ permission:
   loginOlaresCLI: true
 
 spec:
-  versionName: '0.1.4'
+  versionName: '0.1.5'
   fullDescription: |
     Private admin console for managing sites on this Olares (woojinc1205).
 
     Lists Market apps, stop/resume, deploy/rollback from GitHub release chart
     tarballs, edit declared env vars, set memorable *.olares.com domains and
     guide custom-domain DNS (Squarespace/Google — paste only), manage redirect
-    rules via REDIRECT_RULES_JSON, and view pod logs.
+    rules via REDIRECT_RULES_JSON, view pod logs, new-site wizard (chart tgz),
+    and app backups (pg_dump + MinIO via BACKUP_TOKEN).
 
     Requires ConfigMap os-framework/login-olares-cli-allow-list to include
     siteconsole (keep lares,modeswitch), then restart app-service and

@@ -44,7 +44,7 @@ WEBHOOK_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Olares Site Console", version="0.1.4")
+app = FastAPI(title="Olares Site Console", version="0.1.5")
 app.add_middleware(MetricsMiddleware)
 _lock = asyncio.Lock()
 _busy = False
@@ -267,7 +267,7 @@ async def metrics():
 
 @app.get("/api/health")
 async def api_health():
-    return {"ok": True, "runtime": "siteconsole", "version": "0.1.4"}
+    return {"ok": True, "runtime": "siteconsole", "version": "0.1.5"}
 
 
 @app.get("/api/config")
@@ -894,14 +894,18 @@ async def analytics_summary(limit: int = 200):
 
 
 STARTERS = [
-    {"id": "nextjs", "path": "starters/nextjs", "port": 3000, "notes": "Next.js"},
+    {"id": "nextjs", "path": "starters/nextjs", "port": 3000, "notes": "Next.js App Router"},
     {"id": "python-fastapi", "path": "starters/python-fastapi", "port": 8000, "notes": "FastAPI"},
-    {"id": "static-vite", "path": "starters/static-vite", "port": 3000, "notes": "Static Vite"},
+    {"id": "static-vite", "path": "starters/static-vite", "port": 3000, "notes": "Vite static"},
     {"id": "node-express", "path": "starters/node-express", "port": 3000, "notes": "Express"},
     {"id": "django", "path": "starters/django", "port": 8000, "notes": "Django"},
     {"id": "go", "path": "starters/go", "port": 8080, "notes": "Go"},
     {"id": "swift-vapor", "path": "starters/swift-vapor", "port": 8080, "notes": "Swift Vapor"},
 ]
+
+WIZARD_ASSETS = Path(os.environ.get("WIZARD_ASSETS", "/srv/wizard-assets"))
+BACKUP_CFG = DATA_DIR / "backup-config.json"
+BACKUP_DIR = DATA_DIR / "backups"
 
 
 class WizardPlan(BaseModel):
@@ -910,6 +914,17 @@ class WizardPlan(BaseModel):
     title: str = ""
     postgres: bool = True
     storage: bool = False
+
+
+class WizardGenerate(WizardPlan):
+    developer: str = "woojinc1205"
+    image_repo: str = ""
+
+
+class BackupConfigBody(BaseModel):
+    """Per-app backup trigger config. Tokens are stored on disk; never logged."""
+    apps: dict[str, dict[str, str]] = Field(default_factory=dict)
+    # each value: { "entrance_url": "https://…", "backup_token": "…" }
 
 
 @app.get("/api/wizard/starters")
@@ -929,18 +944,137 @@ async def wizard_plan(body: WizardPlan):
             "starter": body.starter,
             "title": title,
             "steps": [
-                f"Copy starters/{body.starter} into a new repo or apps/{body.app_name}",
-                f"Copy chart/site-template → chart/{body.app_name}; replace SITE_* with {body.app_name}",
-                f"Set postgres.enabled={str(body.postgres).lower()}, storage.enabled={str(body.storage).lower()}",
-                "Push to GitHub; wait for publish workflow chart .tgz",
-                f"In Site Console → Deploy: install {body.app_name} from the release asset",
+                f"Generate chart via POST /api/wizard/generate (or UI button)",
+                f"Download chart/{body.app_name}-*.tgz from Site Console",
+                "Push starter code + wire GH Actions publish for the image",
+                f"Market → Upload → Install {body.app_name} (or Deploy in this console)",
             ],
             "preview_note": "Full PR preview installs are not automated on Olares (see docs/phase3-wizard-backups-previews.md).",
         },
     }
 
 
-BACKUP_DIR = DATA_DIR / "backups"
+def _replace_placeholders(root: Path, mapping: dict[str, str]) -> int:
+    n = 0
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if path.suffix in {".png", ".jpg", ".webp", ".gz", ".tgz", ".zip"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        orig = text
+        for k, v in mapping.items():
+            text = text.replace(k, v)
+        if text != orig:
+            path.write_text(text, encoding="utf-8")
+            n += 1
+    return n
+
+
+@app.post("/api/wizard/generate")
+async def wizard_generate(body: WizardGenerate):
+    """Materialize chart/site-template + starter into DATA_DIR and package a .tgz."""
+    if body.starter not in {s["id"] for s in STARTERS}:
+        raise HTTPException(400, f"unknown starter {body.starter}")
+    tpl = WIZARD_ASSETS / "chart" / "site-template"
+    starter_src = WIZARD_ASSETS / "starters" / body.starter
+    if not tpl.is_dir():
+        raise HTTPException(500, f"wizard assets missing at {tpl}")
+    if not starter_src.is_dir():
+        raise HTTPException(500, f"starter missing at {starter_src}")
+
+    title = body.title or body.app_name
+    image = body.image_repo or f"ghcr.io/wooj-commits/{body.app_name}"
+    out = DATA_DIR / "wizard" / body.app_name
+    if out.exists():
+        shutil.rmtree(out)
+    chart_out = out / "chart" / body.app_name
+    app_out = out / "app"
+    chart_out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(tpl, chart_out)
+    shutil.copytree(starter_src, app_out)
+
+    mapping = {
+        "SITE_NAME": body.app_name,
+        "SITE_TITLE": title,
+        "SITE_DESCRIPTION": f"{title} — generated by Site Console wizard",
+        "SITE_DEVELOPER": body.developer,
+        "SITE_IMAGE": body.app_name,
+        "OWNER": "wooj-commits",
+        "REPO": "olares-site-platform",
+    }
+    # Toggle postgres / storage blocks roughly via values
+    values = chart_out / "values.yaml"
+    if values.exists():
+        v = values.read_text()
+        v = v.replace("SITE_NAME", body.app_name).replace("SITE_IMAGE", body.app_name).replace("OWNER", "wooj-commits")
+        # naive toggles
+        if "postgres:" in v:
+            v = re.sub(r"(postgres:\n(?:.*\n)*?\s+enabled:\s*)(true|false)",
+                       rf"\g<1>{str(body.postgres).lower()}", v, count=1)
+        if "storage:" in v or "enabled:" in v:
+            v = re.sub(r"(storage:\n(?:.*\n)*?\s+enabled:\s*)(true|false)",
+                       rf"\g<1>{str(body.storage).lower()}", v, count=1)
+        values.write_text(v)
+
+    replaced = _replace_placeholders(chart_out, mapping)
+
+    # Package chart as tgz (pure tar; helm package not required)
+    dist = out / "dist"
+    dist.mkdir(parents=True, exist_ok=True)
+    # Chart version from Chart.yaml
+    ver = "0.1.0"
+    cy = chart_out / "Chart.yaml"
+    if cy.exists():
+        m = re.search(r"^version:\s*(\S+)", cy.read_text(), re.M)
+        if m:
+            ver = m.group(1).strip().strip('"')
+    tgz_name = f"{body.app_name}-{ver}.tgz"
+    tgz_path = dist / tgz_name
+    # helm-style package: chart dir named by chart name as top-level folder
+    import tarfile
+    with tarfile.open(tgz_path, "w:gz") as tar:
+        tar.add(chart_out, arcname=body.app_name)
+
+    readme = out / "NEXT_STEPS.md"
+    readme.write_text(
+        f"# {title} — wizard output\n\n"
+        f"- Chart: dist/{tgz_name}\n"
+        f"- App starter copy: app/ (from {body.starter})\n"
+        f"- Placeholders replaced in {replaced} chart files\n\n"
+        "## Install\n\n"
+        f"1. Build/push the container image to {image}\n"
+        "2. Market → Upload → Install the chart tgz, or Site Console → Deploy\n"
+        "3. Set BACKUP_TOKEN in app Settings if you want Site Console backups\n"
+    )
+    return {
+        "ok": True,
+        "app_name": body.app_name,
+        "chart_tgz": tgz_name,
+        "download": f"/api/wizard/download/{body.app_name}/{tgz_name}",
+        "starter_path": str(app_out.relative_to(DATA_DIR)) if False else f"wizard/{body.app_name}/app",
+        "steps": [
+            f"Download {tgz_name}",
+            f"Build image from wizard/{body.app_name}/app (add Dockerfile if needed)",
+            "Market Upload/Update or Console Deploy",
+        ],
+        "preview_note": "PR previews are not automated on Olares.",
+    }
+
+
+@app.get("/api/wizard/download/{app_name}/{filename}")
+async def wizard_download(app_name: str, filename: str):
+    if not re.match(r"^[a-z][a-z0-9-]{1,40}$", app_name):
+        raise HTTPException(400, "bad app name")
+    if "/" in filename or ".." in filename or not filename.endswith(".tgz"):
+        raise HTTPException(400, "bad filename")
+    path = DATA_DIR / "wizard" / app_name / "dist" / filename
+    if not path.is_file():
+        raise HTTPException(404, "not found — generate first")
+    return FileResponse(path, filename=filename, media_type="application/gzip")
 
 
 @app.get("/api/backups")
@@ -950,26 +1084,141 @@ async def backups_list():
     for f in sorted(BACKUP_DIR.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True):
         if f.is_file():
             items.append({"name": f.name, "size": f.stat().st_size, "mtime": f.stat().st_mtime})
+    # Also surface Olares Settings backup plans (read-only)
+    plans = None
+    try:
+        plans = await cli_json("settings", "backup", "plans", "list", timeout=60.0)
+    except Exception as e:
+        plans = {"error": str(e)[:200]}
+    cfg = _load_json(BACKUP_CFG, {"apps": {}})
+    # never return raw tokens
+    safe_apps = {
+        k: {"entrance_url": (v or {}).get("entrance_url", ""), "backup_token_set": bool((v or {}).get("backup_token"))}
+        for k, v in (cfg.get("apps") or {}).items()
+    }
     return {
         "ok": True,
         "backups": items,
-        "note": "Create backups via POST /api/backups/{app} once Postgres dump credentials are available in-pod (Phase 3).",
+        "config": safe_apps,
+        "olares_plans": plans,
+        "note": "App backups call POST {entrance}/api/admin/backup with BACKUP_TOKEN (pg_dump + MinIO tar).",
     }
+
+
+@app.put("/api/backups/config")
+async def backups_config_set(body: BackupConfigBody):
+    # merge; do not log tokens
+    cur = _load_json(BACKUP_CFG, {"apps": {}})
+    if not isinstance(cur, dict):
+        cur = {"apps": {}}
+    apps = cur.setdefault("apps", {})
+    for name, conf in body.apps.items():
+        if not re.match(r"^[a-z][a-z0-9-]{1,40}$", name):
+            continue
+        prev = apps.get(name) or {}
+        entrance = (conf.get("entrance_url") or prev.get("entrance_url") or "").strip().rstrip("/")
+        token = conf.get("backup_token")
+        entry = {"entrance_url": entrance}
+        if token is not None and token != "":
+            entry["backup_token"] = token
+        elif prev.get("backup_token"):
+            entry["backup_token"] = prev["backup_token"]
+        apps[name] = entry
+    _save_json(BACKUP_CFG, cur)
+    return {"ok": True, "apps": list(apps.keys())}
 
 
 @app.post("/api/backups/{name}")
 async def backups_create(name: str):
-    """Placeholder: records intent; real pg_dump needs DB URL from settings/env (not always exposed to console)."""
+    """Trigger in-app backup (pg_dump + MinIO) via the app admin endpoint."""
+    if not re.match(r"^[a-z][a-z0-9-]{0,40}$", name):
+        raise HTTPException(400, "bad app name")
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    meta = BACKUP_DIR / f"{name}-{stamp}.json"
-    meta.write_text(json.dumps({
-        "app": name,
-        "at": stamp,
-        "status": "planned",
-        "message": "Wire pg_dump + MinIO tar when console can read middleware DSN; for now this is a stub marker.",
-    }, indent=2))
-    return {"ok": True, "file": meta.name, "status": "planned"}
+
+    # siteconsole self-backup: tar DATA_DIR (no secrets in response names)
+    if name == "siteconsole":
+        out = BACKUP_DIR / f"siteconsole-{stamp}.tar.gz"
+        proc = await asyncio.create_subprocess_exec(
+            "tar", "-czf", str(out), "-C", str(DATA_DIR),
+            "--exclude=backups", ".",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        if proc.returncode != 0 or not out.is_file():
+            raise HTTPException(500, "siteconsole tar backup failed")
+        return {"ok": True, "file": out.name, "status": "ok", "bytes": out.stat().st_size}
+
+    cfg = _load_json(BACKUP_CFG, {"apps": {}})
+    conf = (cfg.get("apps") or {}).get(name) or {}
+    entrance = (conf.get("entrance_url") or "").strip().rstrip("/")
+    token = (conf.get("backup_token") or "").strip()
+
+    # Auto-discover entrance if missing
+    if not entrance:
+        try:
+            ents = await cli_json("settings", "apps", "entrances", "list", name)
+            # normalize
+            rows = ents if isinstance(ents, list) else (ents.get("items") or ents.get("entrances") or [])
+            for e in rows or []:
+                if not isinstance(e, dict):
+                    continue
+                url = e.get("url") or e.get("endpoint") or e.get("URL") or ""
+                if url and not url.startswith("http"):
+                    url = "https://" + url
+                if url:
+                    entrance = url.rstrip("/")
+                    break
+        except Exception as e:
+            logger.warning("entrance discover failed for %s: %s", name, e)
+
+    if not entrance:
+        raise HTTPException(
+            400,
+            f"No entrance_url for {name}. PUT /api/backups/config with apps.{name}.entrance_url",
+        )
+    if not token:
+        raise HTTPException(
+            400,
+            f"No backup_token for {name}. Set the same BACKUP_TOKEN on the app (Settings) and here.",
+        )
+
+    url = f"{entrance}/api/admin/backup"
+    try:
+        async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
+            r = await client.post(url, headers={"Authorization": f"Bearer {token}"})
+    except Exception as e:
+        raise HTTPException(502, f"backup request failed: {e}") from e
+
+    if r.status_code != 200:
+        # do not echo body if it might contain secrets; keep short
+        raise HTTPException(502, f"app backup HTTP {r.status_code}")
+
+    ctype = r.headers.get("content-type", "")
+    if "json" in ctype:
+        # error payload
+        raise HTTPException(502, "app returned JSON error instead of archive")
+
+    fname = f"{name}-{stamp}.tar.gz"
+    dest = BACKUP_DIR / fname
+    dest.write_bytes(r.content)
+    return {
+        "ok": True,
+        "file": fname,
+        "status": "ok",
+        "bytes": dest.stat().st_size,
+        "source": url.split("?")[0],
+    }
+
+
+@app.get("/api/backups/file/{filename}")
+async def backups_download(filename: str):
+    if "/" in filename or ".." in filename:
+        raise HTTPException(400, "bad filename")
+    path = BACKUP_DIR / filename
+    if not path.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(path, filename=filename, media_type="application/gzip")
 
 
 @app.get("/")

@@ -8,7 +8,7 @@ metadata:
   title: Olares Demo
   description: Native Olares site platform demo — Better Auth, Postgres CRUD, bundled MinIO uploads
   icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
-  version: 0.1.9
+  version: 0.2.0
   categories:
   - Developer Tools
   - Productivity_v112
@@ -27,7 +27,7 @@ permission:
   appData: true
 
 spec:
-  versionName: '0.1.9'
+  versionName: '0.2.0'
   fullDescription: |
     Demo app for the reusable Olares site platform (wooj-commits/olares-site-platform).
 
@@ -120,3 +120,10 @@ envs:
   applyOnChange: true
   default: "[]"
   description: JSON array of {from_path,to_url,status} redirect rules (Site Console).
+- envName: BACKUP_TOKEN
+  required: false
+  type: password
+  editable: true
+  applyOnChange: true
+  description: Shared secret for Site Console POST /api/admin/backup (pg_dump + MinIO archive)
+

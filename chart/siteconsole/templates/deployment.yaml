@@ -16,6 +16,10 @@ spec:
     metadata:
       labels:
         app: siteconsole
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
       automountServiceAccountToken: false
       initContainers:
@@ -99,6 +103,13 @@ kind: Service
 metadata:
   name: siteconsole
   namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: siteconsole
+    app.kubernetes.io/name: siteconsole
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
 spec:
   selector:
     app: siteconsole

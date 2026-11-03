@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/wooj-commits/olares-site-console
-  tag: "0.1.4"
+  tag: "0.1.5"
   pullPolicy: IfNotPresent
 
 workloads:

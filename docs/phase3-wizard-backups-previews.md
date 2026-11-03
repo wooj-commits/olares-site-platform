@@ -1,15 +1,25 @@
 # Phase 3 — New-site wizard, backups, PR previews
 
-## New-site wizard (console)
+## New-site wizard (console) — shipped
 
-API stubs in siteconsole (`/api/wizard/*`): pick starter → generate chart name checklist → link to GitHub Actions publish → Market upload/install instructions. Full auto-clone of starters onto GitHub needs a GitHub App token (optional `GITHUB_TOKEN` already supported for releases).
+UI **New site** → pick starter → **Generate chart tgz**:
 
-## Backups
+1. Copies embedded `chart/site-template` + `starters/<id>` into Site Console appData
+2. Replaces `SITE_*` placeholders
+3. Packages `{app}-{ver}.tgz` for Market Upload / Deploy download
 
-Plan: `pg_dump` of middleware Postgres DB + tar of MinIO `userspace.appData/<app>` into `/app/data/backups/` on siteconsole or a dedicated backup job. Restore is manual Market/SQL for MVP. Not edge S3 Dokploy parity.
+APIs: `GET /api/wizard/starters`, `POST /api/wizard/plan`, `POST /api/wizard/generate`, `GET /api/wizard/download/...`
 
-## PR preview deploys — feasibility
+## Backups — shipped (app-level)
 
-**Hard / skip automated MVP.** Each PR would need a unique chart `metadata.name` / appid, a Market install of an ephemeral chart, and Tunnel entrance. Olares Market upload + install is slow, allowlist/CLI privileges apply, and cleaning up failed previews risks touching other apps. Prefer: document “promote main only”; optional later: one shared `preview` app overwritten per PR (lossy) or manual chart name `app-pr-N`.
+**Path:** each site that has Postgres/MinIO exposes `POST /api/admin/backup` (Bearer `BACKUP_TOKEN`).
 
-Recommended: **document why not** for full Dokploy-style PR previews; ship wizard + backup dump API first.
+- Demo: `pg_dump` of `DATABASE_URL` + MinIO object tree → `.tar.gz`
+- Site Console: configures `entrance_url` + `backup_token` (stored under appData; never logged), calls the app endpoint, stores archives under `/app/data/backups/`
+- Also lists Olares Settings backup plans (`olares-cli settings backup plans list`) for OS-level restic/kopia plans (create those in Settings → Backup SPA)
+
+Restore is still manual (psql + mc/cp) for MVP.
+
+## PR preview deploys — still not automated
+
+Each PR would need a unique chart `metadata.name` / appid, Market install, and Tunnel entrance. Prefer promote `main` only; optional later: shared `preview` app overwritten per PR.

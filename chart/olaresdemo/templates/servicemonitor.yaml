@@ -1,0 +1,27 @@
+{{- /*
+  KubeSphere/Olares prometheus-k8s selects ServiceMonitors labeled
+  app.kubernetes.io/vendor: kubesphere. Path must match the app /metrics
+  exposition. Do not change NetworkPolicies — operator scrape is the sanctioned path.
+*/ -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: olaresdemo
+  namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: olaresdemo
+    app.kubernetes.io/name: olaresdemo
+    app.kubernetes.io/vendor: kubesphere
+spec:
+  selector:
+    matchLabels:
+      app: olaresdemo
+  namespaceSelector:
+    matchNames:
+      - '{{ .Release.Namespace }}'
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      scheme: http

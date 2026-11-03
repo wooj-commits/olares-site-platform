@@ -73,6 +73,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prep siteconsole wizard assets
+        if: matrix.name == 'olares-site-console'
+        run: bash scripts/prep-siteconsole-assets.sh
+
       - name: Build and push (Dockerfile)
         if: steps.strategy.outputs.mode == 'dockerfile'
         uses: docker/build-push-action@v6
