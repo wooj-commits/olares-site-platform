@@ -44,7 +44,7 @@ WEBHOOK_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Olares Site Console", version="0.1.2")
+app = FastAPI(title="Olares Site Console", version="0.1.3")
 app.add_middleware(MetricsMiddleware)
 _lock = asyncio.Lock()
 _busy = False
@@ -267,7 +267,7 @@ async def metrics():
 
 @app.get("/api/health")
 async def api_health():
-    return {"ok": True, "runtime": "siteconsole", "version": "0.1.2"}
+    return {"ok": True, "runtime": "siteconsole", "version": "0.1.3"}
 
 
 @app.get("/api/config")
@@ -890,6 +890,86 @@ async def analytics_summary(limit: int = 200):
         t = str(ev.get("type") or "unknown")
         counts[t] = counts.get(t, 0) + 1
     return {"ok": True, "events": events[-100:], "counts": counts}
+
+
+
+STARTERS = [
+    {"id": "nextjs", "path": "starters/nextjs", "port": 3000, "notes": "Next.js"},
+    {"id": "python-fastapi", "path": "starters/python-fastapi", "port": 8000, "notes": "FastAPI"},
+    {"id": "static-vite", "path": "starters/static-vite", "port": 3000, "notes": "Static Vite"},
+    {"id": "node-express", "path": "starters/node-express", "port": 3000, "notes": "Express"},
+    {"id": "django", "path": "starters/django", "port": 8000, "notes": "Django"},
+    {"id": "go", "path": "starters/go", "port": 8080, "notes": "Go"},
+    {"id": "swift-vapor", "path": "starters/swift-vapor", "port": 8080, "notes": "Swift Vapor"},
+]
+
+
+class WizardPlan(BaseModel):
+    app_name: str = Field(..., min_length=2, pattern=r"^[a-z][a-z0-9-]{1,40}$")
+    starter: str
+    title: str = ""
+    postgres: bool = True
+    storage: bool = False
+
+
+@app.get("/api/wizard/starters")
+async def wizard_starters():
+    return {"ok": True, "starters": STARTERS, "checklist_doc": "docs/new-site-checklist.md"}
+
+
+@app.post("/api/wizard/plan")
+async def wizard_plan(body: WizardPlan):
+    if body.starter not in {s["id"] for s in STARTERS}:
+        raise HTTPException(400, f"unknown starter {body.starter}")
+    title = body.title or body.app_name
+    return {
+        "ok": True,
+        "plan": {
+            "app_name": body.app_name,
+            "starter": body.starter,
+            "title": title,
+            "steps": [
+                f"Copy starters/{body.starter} into a new repo or apps/{body.app_name}",
+                f"Copy chart/site-template → chart/{body.app_name}; replace SITE_* with {body.app_name}",
+                f"Set postgres.enabled={str(body.postgres).lower()}, storage.enabled={str(body.storage).lower()}",
+                "Push to GitHub; wait for publish workflow chart .tgz",
+                f"In Site Console → Deploy: install {body.app_name} from the release asset",
+            ],
+            "preview_note": "Full PR preview installs are not automated on Olares (see docs/phase3-wizard-backups-previews.md).",
+        },
+    }
+
+
+BACKUP_DIR = DATA_DIR / "backups"
+
+
+@app.get("/api/backups")
+async def backups_list():
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    items = []
+    for f in sorted(BACKUP_DIR.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if f.is_file():
+            items.append({"name": f.name, "size": f.stat().st_size, "mtime": f.stat().st_mtime})
+    return {
+        "ok": True,
+        "backups": items,
+        "note": "Create backups via POST /api/backups/{app} once Postgres dump credentials are available in-pod (Phase 3).",
+    }
+
+
+@app.post("/api/backups/{name}")
+async def backups_create(name: str):
+    """Placeholder: records intent; real pg_dump needs DB URL from settings/env (not always exposed to console)."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    meta = BACKUP_DIR / f"{name}-{stamp}.json"
+    meta.write_text(json.dumps({
+        "app": name,
+        "at": stamp,
+        "status": "planned",
+        "message": "Wire pg_dump + MinIO tar when console can read middleware DSN; for now this is a stub marker.",
+    }, indent=2))
+    return {"ok": True, "file": meta.name, "status": "planned"}
 
 
 @app.get("/")

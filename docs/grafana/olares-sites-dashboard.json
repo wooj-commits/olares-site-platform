@@ -1,0 +1,27 @@
+{
+  "title": "Olares Sites",
+  "uid": "olares-sites",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Request rate",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "sum(rate(http_requests_total[5m])) by (path)", "legendFormat": "{{path}}"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency (avg)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "sum(rate(http_request_duration_seconds_sum[5m])) / sum(rate(http_request_duration_seconds_count[5m]))", "legendFormat": "avg"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{"expr": "sum(rate(http_errors_total[5m])) by (path)", "legendFormat": "{{path}}"}]
+    }
+  ]
+}

@@ -71,6 +71,8 @@ pre.log{background:#0a101c;border:1px solid var(--border);border-radius:8px;padd
     <button type="button" data-view="domains">Domains & DNS</button>
     <button type="button" data-view="redirects">Redirects</button>
     <button type="button" data-view="logs">Logs</button>
+    <button type="button" data-view="analytics">Analytics</button>
+    <button type="button" data-view="wizard">New site</button>
     <button type="button" data-view="history">History</button>
   </nav>
   <main>
@@ -199,6 +201,28 @@ pre.log{background:#0a101c;border:1px solid var(--border);border-radius:8px;padd
           <button class="btn primary" type="button" id="btn-logs" style="margin-top:18px">Fetch logs</button>
         </div>
         <pre class="log" id="logs-out" style="margin-top:10px"></pre>
+      </div>
+    </section>
+
+    
+    <section id="view-analytics" class="hidden">
+      <div class="card">
+        <p class="muted">Self-hosted pageviews / web vitals / errors via <code>POST /api/analytics/collect</code>. Paste this beacon into site apps (or use the demo snippet).</p>
+        <pre class="log" id="beacon-snippet"></pre>
+        <div class="row"><button class="btn" type="button" id="btn-analytics-refresh">Refresh summary</button></div>
+        <pre class="log" id="analytics-out" style="margin-top:10px"></pre>
+      </div>
+    </section>
+    <section id="view-wizard" class="hidden">
+      <div class="card">
+        <div class="grid2">
+          <label class="field"><span>App name</span><input id="wiz-name" placeholder="mysite"/></label>
+          <label class="field"><span>Starter</span><select id="wiz-starter"></select></label>
+          <label class="field"><span>Title</span><input id="wiz-title" placeholder="My Site"/></label>
+          <label class="field"><span>Postgres</span><select id="wiz-pg"><option value="true">yes</option><option value="false">no</option></select></label>
+        </div>
+        <button class="btn primary" type="button" id="btn-wiz-plan">Generate plan</button>
+        <pre class="log" id="wiz-out" style="margin-top:10px"></pre>
       </div>
     </section>
 
@@ -472,6 +496,43 @@ async function refreshAll() {
 $('btn-refresh').onclick = refreshAll;
 $('btn-reload-apps').onclick = loadApps;
 $('btn-load-releases').onclick = loadReleases;
+
+$('beacon-snippet').textContent = `<!-- Site Console analytics beacon -->
+<script>
+(function(){
+  var u='/api/analytics/collect'; // same-origin if proxied, else full Site Console URL
+  function send(p){ try{ navigator.sendBeacon ? navigator.sendBeacon(u, new Blob([JSON.stringify(p)],{type:'application/json'})) : fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p),keepalive:true}); }catch(e){} }
+  send({type:'pageview', path: location.pathname});
+  if (window.PerformanceObserver) {
+    try {
+      new PerformanceObserver(function(list){ list.getEntries().forEach(function(e){ send({type:'webvital', name:e.name, value:e.value||e.duration, path:location.pathname}); }); }).observe({type:'largest-contentful-paint', buffered:true});
+    } catch(e){}
+  }
+  window.addEventListener('error', function(ev){ send({type:'error', name:String(ev.message||'error'), path:location.pathname, meta:{src:ev.filename}}); });
+})();
+</script>`;
+
+$('btn-analytics-refresh').onclick = async () => {
+  try { $('analytics-out').textContent = JSON.stringify(await api('/api/analytics/summary'), null, 2); }
+  catch(e){ flash(String(e.message||e),'err'); }
+};
+
+async function loadStarters() {
+  try {
+    const d = await api('/api/wizard/starters');
+    $('wiz-starter').innerHTML = (d.starters||[]).map(s => `<option value="${s.id}">${s.id} — ${s.notes}</option>`).join('');
+  } catch(e){}
+}
+$('btn-wiz-plan').onclick = async () => {
+  try {
+    const body = { app_name: $('wiz-name').value.trim(), starter: $('wiz-starter').value, title: $('wiz-title').value.trim(), postgres: $('wiz-pg').value==='true', storage: false };
+    const d = await api('/api/wizard/plan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    $('wiz-out').textContent = JSON.stringify(d.plan, null, 2);
+  } catch(e){ flash(String(e.message||e),'err'); }
+};
+const _oldRefresh = refreshAll;
+refreshAll = async function(){ await _oldRefresh(); await loadStarters(); $('btn-analytics-refresh').click().catch?.(()=>{}); };
+
 refreshAll().catch(e => flash(String(e.message||e),'err'));
 setInterval(() => { loadConfig().catch(()=>{}); }, 8000);
 </script>
