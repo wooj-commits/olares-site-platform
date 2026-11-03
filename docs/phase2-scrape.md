@@ -1,39 +1,22 @@
-# Phase 2 — Scraping site `/metrics` on Olares
+# Phase 2 — Site metrics on Olares
 
-## Sanctioned path (no NetworkPolicy edits)
+## Diagnosis (2026-11-03, woojinc1205)
 
-KubeSphere’s `prometheus-k8s` (namespace `kubesphere-monitoring-system`) discovers targets via **ServiceMonitor** objects labeled:
+- App `/metrics` works (public demo/fastapihello return Prometheus text).
+- Grafana → Prometheus API entrance works in-browser, but from the box the API is Authelia-gated (302); no kubectl on the box.
+- After installing ServiceMonitors (`app.kubernetes.io/vendor: kubesphere` + `prometheus.io/*` annotations), Explore still had **no** `http_requests_total` series.
+- Conclusion: **prometheus-k8s is not scraping user app namespaces** (ServiceMonitors stripped and/or namespace selector / NetworkPolicy). **Do not change NetworkPolicies** without an explicit review.
 
-```yaml
-metadata:
-  labels:
-    app.kubernetes.io/vendor: kubesphere
-```
+## Fallback (shipped): Site Console poller
 
-Each site chart ships:
+Site Console (`0.1.6+`) polls each site’s `/metrics` every ~20s:
 
-1. **Service** annotations `prometheus.io/scrape|port|path` (annotation SD fallback)
-2. **ServiceMonitor** in the app namespace selecting `app: <name>`, endpoint port `http`, path `/metrics`
+1. Default public URLs for `olaresdemo` / `fastapihello`, plus `http://127.0.0.1:8080/metrics` for itself
+2. Refreshes entrance URLs via `olares-cli settings apps entrances list` every 5m
+3. Stores samples in SQLite under appData (`metrics.sqlite`)
+4. **Metrics** tab: request rate, latency, error rate charts
+5. Combined exposition: `GET /federate` (and `/api/metrics/federate`)
 
-Grafana datasource remains the Prometheus API entrance (`https://4ae9f19e1.<id>.olares.com`).
+Optional: `PUT /api/metrics/targets` with `{ "targets":[{"app":"…","url":"https://…/metrics"}], "interval_s":20 }`.
 
-## Metric names (site apps)
-
-| Metric | Type | Labels |
-|--------|------|--------|
-| `http_requests_total` | counter | `method`, `path`, `status` |
-| `http_errors_total` | counter | `method`, `path` |
-| `http_request_duration_seconds_sum` / `_count` | counter | `method`, `path` |
-
-Kubernetes apiserver also exposes `http_request_duration_seconds_*`. Dashboard panels **must** filter `service=~"olaresdemo\|fastapihello\|siteconsole"` (or the ServiceMonitor job name) so Latency is not a false positive from the control plane.
-
-## After Market Update
-
-1. Update olaresdemo / fastapihello / siteconsole charts
-2. In Prometheus UI (or Grafana Explore): `http_requests_total{service="olaresdemo"}`
-3. Re-import `docs/grafana/olares-sites-dashboard.json`
-4. If targets stay empty after ~2m, report — do **not** open NetworkPolicies without review (operator scrape may need a Control Hub exception)
-
-## Demo paths
-
-- Prometheus path: **`/metrics`** (also available as `/api/metrics`)
+Charts shipped earlier still work **if** cluster scrape is fixed later; until then use the console Metrics tab.

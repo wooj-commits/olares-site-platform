@@ -24,7 +24,7 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY server.py fastapi_metrics.py ./
+COPY server.py fastapi_metrics.py metrics_poller.py ./
 COPY static ./static/
 
 # Wizard assets: site-template + starters (copied from repo root in build context)

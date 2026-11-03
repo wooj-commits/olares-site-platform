@@ -20,6 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from fastapi_metrics import MetricsMiddleware, metrics_response
+from metrics_poller import (
+    MetricsStore,
+    merge_targets,
+    poll_loop,
+)
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -33,6 +38,9 @@ HISTORY_FILE = DATA_DIR / "deploy-history.json"
 REDIRECTS_FILE = DATA_DIR / "redirects.json"
 REGISTRY_FILE = DATA_DIR / "managed-apps.json"
 NOTIF_FILE = DATA_DIR / "notifications.json"
+METRICS_CFG = DATA_DIR / "metrics-targets.json"
+METRICS_DB = DATA_DIR / "metrics.sqlite"
+METRICS_INTERVAL = float(os.environ.get("METRICS_INTERVAL_S", "20"))
 
 GH_OWNER = os.environ.get("GH_OWNER", "wooj-commits").strip()
 GH_REPO = os.environ.get("GH_REPO", "olares-site-platform").strip()
@@ -44,9 +52,12 @@ WEBHOOK_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Olares Site Console", version="0.1.5")
+app = FastAPI(title="Olares Site Console", version="0.1.6")
 app.add_middleware(MetricsMiddleware)
 _lock = asyncio.Lock()
+_metrics_store: MetricsStore | None = None
+_metrics_task: asyncio.Task | None = None
+_metrics_stop: asyncio.Event | None = None
 _busy = False
 _busy_msg = ""
 _last_error = ""
@@ -260,6 +271,115 @@ async def healthz():
     return {"status": "ok", "service": "siteconsole"}
 
 
+def _metrics() -> MetricsStore:
+    global _metrics_store
+    if _metrics_store is None:
+        _metrics_store = MetricsStore(METRICS_DB)
+    return _metrics_store
+
+
+def _load_metrics_targets() -> list[dict[str, str]]:
+    cfg = _load_json(METRICS_CFG, {})
+    if not isinstance(cfg, dict):
+        cfg = {}
+    backup_cfg = _load_json(DATA_DIR / "backup-config.json", {"apps": {}})
+    if not isinstance(backup_cfg, dict):
+        backup_cfg = {"apps": {}}
+    discovered = _load_json(DATA_DIR / "metrics-discovered.json", {"targets": []})
+    if isinstance(discovered, dict) and discovered.get("targets"):
+        # merge discovered under configured (config wins)
+        base = {"targets": list(discovered.get("targets") or [])}
+        merged_cfg = {
+            "targets": (base["targets"]) + list(cfg.get("targets") or []),
+            **{k: v for k, v in cfg.items() if k != "targets"},
+        }
+        return merge_targets(OLARES_ID, merged_cfg, backup_cfg)
+    return merge_targets(OLARES_ID, cfg, backup_cfg)
+
+
+async def refresh_metrics_discovery() -> None:
+    """Best-effort: resolve entrance URLs for known apps via olares-cli."""
+    names = ["olaresdemo", "fastapihello"]
+    filt = _managed_set()
+    if filt:
+        names = sorted(filt)
+    found = []
+    for name in names:
+        if name == "siteconsole":
+            found.append({"app": name, "url": "http://127.0.0.1:8080/metrics"})
+            continue
+        try:
+            ents = await cli_json("settings", "apps", "entrances", "list", name, timeout=60.0)
+        except Exception as e:
+            logger.info("metrics discovery %s: %s", name, e)
+            continue
+        rows = ents if isinstance(ents, list) else (
+            (ents or {}).get("items") or (ents or {}).get("entrances") or []
+        )
+        for e in rows or []:
+            if not isinstance(e, dict):
+                continue
+            url = e.get("url") or e.get("endpoint") or e.get("URL") or ""
+            if not url:
+                continue
+            if not str(url).startswith("http"):
+                url = "https://" + str(url)
+            url = str(url).rstrip("/") + "/metrics"
+            found.append({"app": name, "url": url})
+            break
+    if found:
+        _save_json(DATA_DIR / "metrics-discovered.json", {"targets": found, "at": time.time()})
+
+
+@app.on_event("startup")
+async def startup_metrics():
+    global _metrics_task, _metrics_stop
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _metrics()
+    _metrics_stop = asyncio.Event()
+    interval = METRICS_INTERVAL
+    cfg = _load_json(METRICS_CFG, {})
+    if isinstance(cfg, dict) and cfg.get("interval_s"):
+        try:
+            interval = float(cfg["interval_s"])
+        except (TypeError, ValueError):
+            pass
+    interval = max(10.0, min(120.0, interval))
+
+    async def _runner():
+        await poll_loop(_metrics(), _load_metrics_targets, interval_s=interval, stop_event=_metrics_stop)
+
+    async def _discover_loop():
+        while _metrics_stop and not _metrics_stop.is_set():
+            try:
+                await refresh_metrics_discovery()
+            except Exception as e:
+                logger.warning("metrics discovery: %s", e)
+            try:
+                await asyncio.wait_for(_metrics_stop.wait(), timeout=300.0)
+            except asyncio.TimeoutError:
+                pass
+
+    _metrics_task = asyncio.create_task(_runner())
+    asyncio.create_task(_discover_loop())
+    asyncio.create_task(refresh_metrics_discovery())
+    logger.info("metrics poller started interval=%ss", interval)
+
+
+@app.on_event("shutdown")
+async def shutdown_metrics():
+    global _metrics_task
+    if _metrics_stop:
+        _metrics_stop.set()
+    if _metrics_task:
+        try:
+            await asyncio.wait_for(_metrics_task, timeout=5.0)
+        except Exception:
+            _metrics_task.cancel()
+
+
+
+
 @app.get("/metrics")
 async def metrics():
     return metrics_response()
@@ -267,7 +387,7 @@ async def metrics():
 
 @app.get("/api/health")
 async def api_health():
-    return {"ok": True, "runtime": "siteconsole", "version": "0.1.5"}
+    return {"ok": True, "runtime": "siteconsole", "version": "0.1.6"}
 
 
 @app.get("/api/config")
@@ -1219,6 +1339,102 @@ async def backups_download(filename: str):
     if not path.is_file():
         raise HTTPException(404, "not found")
     return FileResponse(path, filename=filename, media_type="application/gzip")
+
+
+
+class MetricsTargetsBody(BaseModel):
+    targets: list[dict[str, str]] = Field(default_factory=list)
+    interval_s: float | None = None
+
+
+@app.get("/api/metrics/targets")
+async def api_metrics_targets():
+    cfg = _load_json(METRICS_CFG, {})
+    return {
+        "ok": True,
+        "configured": cfg,
+        "effective": _load_metrics_targets(),
+        "statuses": _metrics().statuses(),
+        "interval_s": (cfg or {}).get("interval_s", METRICS_INTERVAL) if isinstance(cfg, dict) else METRICS_INTERVAL,
+        "note": "Cluster Prometheus ServiceMonitors are not scraping user apps on this Olares; Site Console polls /metrics instead.",
+    }
+
+
+@app.put("/api/metrics/targets")
+async def api_metrics_targets_set(body: MetricsTargetsBody):
+    cfg = {"targets": body.targets}
+    if body.interval_s is not None:
+        cfg["interval_s"] = max(10.0, min(120.0, float(body.interval_s)))
+    _save_json(METRICS_CFG, cfg)
+    return {"ok": True, "effective": _load_metrics_targets()}
+
+
+@app.get("/api/metrics/summary")
+async def api_metrics_summary(app_name: str | None = None, window_s: float = 3600.0):
+    store = _metrics()
+    window_s = max(60.0, min(86400.0, window_s))
+    apps = [app_name] if app_name else sorted({t["app"] for t in _load_metrics_targets()})
+    panels = []
+    for a in apps:
+        req_rates = store.rate_points(a, "http_requests_total", window_s=window_s)
+        err_rates = store.rate_points(a, "http_errors_total", window_s=window_s)
+        # latency = delta(sum)/delta(count) over consecutive samples, aggregated
+        sum_pts = store.series(a, "http_request_duration_seconds_sum", time.time() - window_s)
+        cnt_pts = store.series(a, "http_request_duration_seconds_count", time.time() - window_s)
+        # index counts by labels+ts bucket
+        latency = []
+        by_lab_sum: dict[str, list] = {}
+        by_lab_cnt: dict[str, list] = {}
+        for r in sum_pts:
+            by_lab_sum.setdefault(json.dumps(r["labels"], sort_keys=True), []).append(r)
+        for r in cnt_pts:
+            by_lab_cnt.setdefault(json.dumps(r["labels"], sort_keys=True), []).append(r)
+        for lab, sums in by_lab_sum.items():
+            cnts = by_lab_cnt.get(lab) or []
+            # align by walking
+            ci = 0
+            for i in range(1, len(sums)):
+                s0, s1 = sums[i - 1], sums[i]
+                # find matching count points nearest
+                while ci + 1 < len(cnts) and cnts[ci + 1]["ts"] <= s1["ts"]:
+                    ci += 1
+                if ci == 0:
+                    continue
+                c0, c1 = cnts[max(0, ci - 1)], cnts[ci]
+                ds = s1["value"] - s0["value"]
+                dc = c1["value"] - c0["value"]
+                if dc > 0 and ds >= 0:
+                    latency.append({
+                        "ts": s1["ts"],
+                        "labels": json.loads(lab),
+                        "avg_s": ds / dc,
+                    })
+        # totals for last scrape
+        latest = [x for x in store.latest_counters(a) if x["metric"] == "http_requests_total"]
+        total_req = sum(x["value"] for x in latest)
+        panels.append({
+            "app": a,
+            "request_rate": req_rates[-200:],
+            "error_rate": err_rates[-200:],
+            "latency": latency[-200:],
+            "total_requests_latest": total_req,
+            "paths": sorted({(x["labels"].get("path") or "") for x in latest}),
+        })
+    return {"ok": True, "window_s": window_s, "panels": panels, "statuses": store.statuses()}
+
+
+@app.get("/api/metrics/series")
+async def api_metrics_series(metric: str = "http_requests_total", app_name: str | None = None, window_s: float = 3600.0):
+    store = _metrics()
+    since = time.time() - max(60.0, min(86400.0, window_s))
+    return {"ok": True, "metric": metric, "points": store.series(app_name, metric, since)}
+
+
+@app.get("/federate")
+@app.get("/api/metrics/federate")
+async def api_metrics_federate():
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(_metrics().federate_text(), media_type="text/plain; version=0.0.4")
 
 
 @app.get("/")

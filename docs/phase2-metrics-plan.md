@@ -27,3 +27,8 @@ Self-hosted page views / web vitals / JS errors via a light collector endpoint o
 ## Scrape (implemented)
 
 See `docs/phase2-scrape.md`. Charts ship ServiceMonitor (`app.kubernetes.io/vendor: kubesphere`) + `prometheus.io/*` annotations. Dashboard filters by `service`.
+
+
+## Fallback when cluster scrape fails
+
+Site Console polls `/metrics` into SQLite and charts in the **Metrics** tab (`/federate` for combined text). See `docs/phase2-scrape.md`.
