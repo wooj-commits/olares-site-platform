@@ -8,7 +8,7 @@ metadata:
   title: Olares Demo
   description: Native Olares site platform demo — Better Auth, Postgres CRUD, bundled MinIO uploads
   icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
-  version: 0.1.2
+  version: 0.1.3
   categories:
   - Developer Tools
   - Productivity_v112
@@ -27,7 +27,7 @@ permission:
   appData: true
 
 spec:
-  versionName: '0.1.2'
+  versionName: '0.1.3'
   fullDescription: |
     Demo app for the reusable Olares site platform (wooj-commits/olares-site-platform).
 
@@ -36,7 +36,7 @@ spec:
     notes CRUD, and an in-chart MinIO (beclab/minio-minio on userspace appData) for uploads.
     AUTH_SECRET and MinIO credentials are generated at install and persist across upgrades.
 
-    Public entrance on the default Olares URL. BETTER_AUTH_URL is derived from the entrance
+    Public entrance on the default Olares URL. Base URL is derived from the request Host (allowedHosts *.woojinc1205.olares.com); BETTER_AUTH_URL is an optional
     host; override in Settings only if you change the public URL. Optional OAuth client
     IDs/secrets go in Settings when ready.
   developer: woojinc1205
@@ -86,7 +86,7 @@ envs:
   editable: true
   applyOnChange: true
   default: ""
-  description: Optional override for the public HTTPS base URL (no trailing slash). Leave empty to use the entrance host from Olares.
+  description: Optional static fallback base URL only. Leave empty — the app derives https://<request-host> from Envoy headers.
 - envName: GOOGLE_CLIENT_ID
   required: false
   type: string

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, ensureAuthMigrated } from "@/lib/auth";
 import { ensureSchema, getPool } from "@/lib/db";
 import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 async function requireUser() {
+  await ensureAuthMigrated();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user?.id) return null;
   return session.user;

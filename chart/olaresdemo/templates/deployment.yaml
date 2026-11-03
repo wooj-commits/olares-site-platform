@@ -34,8 +34,12 @@ spec:
           value: {{ .Values.env.PORT | quote }}
         - name: HOSTNAME
           value: "0.0.0.0"
+        - name: BETTER_AUTH_ALLOWED_HOSTS
+          value: "*.woojinc1205.olares.com,*.olares.com,localhost,localhost:3000"
+        {{- with index $oe "BETTER_AUTH_URL" }}
         - name: BETTER_AUTH_URL
-          value: {{ include "olaresdemo.betterAuthURL" . | quote }}
+          value: {{ . | quote }}
+        {{- end }}
         - name: GOOGLE_CLIENT_ID
           value: {{ index $oe "GOOGLE_CLIENT_ID" | default "" | quote }}
         - name: GITHUB_CLIENT_ID

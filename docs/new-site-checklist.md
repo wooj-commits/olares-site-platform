@@ -60,7 +60,7 @@ For a **new single-app repo**, copy the workflow and set matrix to one context `
 
 1. Download the chart `.tgz` from the GitHub Release
 2. Market → My Olares → **Upload** → Install
-3. Optional Settings only: OAuth client IDs/secrets, or `BETTER_AUTH_URL` override if the entrance URL is wrong
+3. Optional Settings only: OAuth client IDs/secrets. Auth base URL is derived from the request host (`*.woojinc1205.olares.com`); `BETTER_AUTH_URL` is an optional static fallback only
 4. Wait until **running**; entrance is **public** by default
 
 No Market MinIO install required for the demo (storage is in-chart). System Postgres is provisioned from the `middleware.postgres` block alone (no `options.dependencies` middleware entries).
