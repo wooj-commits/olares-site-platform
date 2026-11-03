@@ -497,20 +497,18 @@ $('btn-refresh').onclick = refreshAll;
 $('btn-reload-apps').onclick = loadApps;
 $('btn-load-releases').onclick = loadReleases;
 
-$('beacon-snippet').textContent = `<!-- Site Console analytics beacon -->
-<script>
-(function(){
-  var u='/api/analytics/collect'; // same-origin if proxied, else full Site Console URL
-  function send(p){ try{ navigator.sendBeacon ? navigator.sendBeacon(u, new Blob([JSON.stringify(p)],{type:'application/json'})) : fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p),keepalive:true}); }catch(e){} }
-  send({type:'pageview', path: location.pathname});
-  if (window.PerformanceObserver) {
-    try {
-      new PerformanceObserver(function(list){ list.getEntries().forEach(function(e){ send({type:'webvital', name:e.name, value:e.value||e.duration, path:location.pathname}); }); }).observe({type:'largest-contentful-paint', buffered:true});
-    } catch(e){}
-  }
-  window.addEventListener('error', function(ev){ send({type:'error', name:String(ev.message||'error'), path:location.pathname, meta:{src:ev.filename}}); });
-})();
-</script>`;
+// Beacon snippet uses <\/script> so the HTML parser does not close this page script early.
+$('beacon-snippet').textContent = [
+  '<!-- Site Console analytics beacon -->',
+  '<script>',
+  "(function(){",
+  "  var u='/api/analytics/collect';",
+  "  function send(p){ try{ navigator.sendBeacon ? navigator.sendBeacon(u, new Blob([JSON.stringify(p)],{type:'application/json'})) : fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p),keepalive:true}); }catch(e){} }",
+  "  send({type:'pageview', path: location.pathname});",
+  "  window.addEventListener('error', function(ev){ send({type:'error', name:String(ev.message||'error'), path:location.pathname, meta:{src:ev.filename}}); });",
+  "})();",
+  '<\/script>'
+].join(String.fromCharCode(10));
 
 $('btn-analytics-refresh').onclick = async () => {
   try { $('analytics-out').textContent = JSON.stringify(await api('/api/analytics/summary'), null, 2); }
@@ -531,7 +529,11 @@ $('btn-wiz-plan').onclick = async () => {
   } catch(e){ flash(String(e.message||e),'err'); }
 };
 const _oldRefresh = refreshAll;
-refreshAll = async function(){ await _oldRefresh(); await loadStarters(); $('btn-analytics-refresh').click().catch?.(()=>{}); };
+refreshAll = async function(){
+  await _oldRefresh();
+  await loadStarters();
+  try { await $('btn-analytics-refresh').onclick(); } catch(e){}
+};
 
 refreshAll().catch(e => flash(String(e.message||e),'err'));
 setInterval(() => { loadConfig().catch(()=>{}); }, 8000);
