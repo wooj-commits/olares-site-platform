@@ -2,5 +2,5 @@ apiVersion: v2
 name: SITE_NAME
 description: Reusable Olares site chart — any runtime image (Dockerfile / Nixpacks / Buildpacks)
 type: application
-version: 0.1.1
-appVersion: "0.1.1"
+version: 0.1.2
+appVersion: "0.1.2"

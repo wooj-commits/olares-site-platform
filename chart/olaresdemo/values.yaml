@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/wooj-commits/olares-site-platform
-  tag: "0.1.1"
+  tag: "0.1.2"
   pullPolicy: IfNotPresent
 
 minioImage:
@@ -14,21 +14,24 @@ workloads:
   minio:
     replicaCount: 1
 
+# Sums must match OlaresManifest accelerator required*/limited*:
+# requests: 200m+50m=250m, 384Mi+128Mi=512Mi
+# limits:   1500m+500m=2000m (2), 1536Mi+512Mi=2048Mi (2Gi)
 resources:
   requests:
-    cpu: 250m
-    memory: 512Mi
+    cpu: 200m
+    memory: 384Mi
   limits:
-    cpu: "2"
-    memory: 2Gi
+    cpu: "1500m"
+    memory: 1536Mi
 
 minioResources:
   requests:
     cpu: 50m
-    memory: 256Mi
+    memory: 128Mi
   limits:
     cpu: 500m
-    memory: 1Gi
+    memory: 512Mi
 
 env:
   NODE_ENV: production

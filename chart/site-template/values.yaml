@@ -1,7 +1,7 @@
 # Replace image before install. Built by GH Actions from Dockerfile or Nixpacks/CNB.
 image:
   repository: ghcr.io/OWNER/SITE_IMAGE
-  tag: "0.1.1"
+  tag: "0.1.2"
   pullPolicy: IfNotPresent
 
 # Container listen port (must match the process inside the image)

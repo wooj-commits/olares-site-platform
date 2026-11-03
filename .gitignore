@@ -10,3 +10,5 @@ npm-debug.log*
 coverage/
 *.pem
 apps/demo/.env
+.venv-ci/
+**/.ci-stub-values.yaml

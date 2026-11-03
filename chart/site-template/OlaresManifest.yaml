@@ -8,7 +8,7 @@ metadata:
   title: SITE_TITLE
   description: SITE_DESCRIPTION
   icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
-  version: 0.1.1
+  version: 0.1.2
   categories:
   - Developer Tools
   - Productivity_v112
@@ -27,7 +27,7 @@ permission:
   appData: true
 
 spec:
-  versionName: '0.1.1'
+  versionName: '0.1.2'
   fullDescription: |
     SITE_DESCRIPTION
 
