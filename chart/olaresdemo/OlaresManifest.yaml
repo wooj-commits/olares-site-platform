@@ -1,0 +1,129 @@
+olaresManifest.version: '0.12.0'
+olaresManifest.type: app
+apiVersion: 'v3'
+
+metadata:
+  name: olaresdemo
+  appid: olaresdemo
+  title: Olares Demo
+  description: Native Olares site platform demo — Better Auth, Postgres CRUD, MinIO uploads
+  icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
+  version: 0.1.0
+  categories:
+  - Developer Tools
+  - Productivity_v112
+
+entrances:
+- name: web
+  host: olaresdemo
+  port: 3000
+  title: Olares Demo
+  icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
+  authLevel: public
+  visible: true
+  openMethod: window
+
+permission:
+  appData: true
+
+spec:
+  versionName: '0.1.0'
+  fullDescription: |
+    Demo app for the reusable Olares site platform (wooj-commits/olares-site-platform).
+
+    Stack: Next.js 15 single container, Better Auth (email/password; Google + GitHub OAuth
+    wired but disabled until client credentials are set), system Postgres middleware for
+    notes CRUD, and system MinIO middleware for per-user file uploads.
+
+    Public entrance on the default Olares URL. Set AUTH_SECRET (and optionally OAuth
+    client IDs/secrets) in Settings → Applications → Olares Demo after install.
+    Set BETTER_AUTH_URL to the public HTTPS URL of this entrance.
+  developer: woojinc1205
+  website: https://github.com/wooj-commits/olares-site-platform
+  sourceCode: https://github.com/wooj-commits/olares-site-platform
+  submitter: woojinc1205
+  doc: https://github.com/wooj-commits/olares-site-platform/blob/main/docs/new-site-checklist.md
+  locale:
+  - en-US
+  license:
+  - text: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  supportArch:
+  - amd64
+  accelerator:
+  - mode: cpu
+    requiredCpu: 250m
+    limitedCpu: "2"
+    requiredMemory: 512Mi
+    limitedMemory: 2Gi
+    requiredDisk: 256Mi
+    limitedDisk: 5Gi
+
+options:
+  apiTimeout: 0
+  dependencies:
+  - name: olares
+    type: system
+    version: '>=1.12.7-0'
+  - name: postgres
+    type: middleware
+    version: '>=1.0.0-0'
+    mandatory: true
+  - name: minio
+    type: middleware
+    version: '>=1.0.0-0'
+    mandatory: true
+
+middleware:
+  postgres:
+    username: olaresdemo
+    databases:
+    - name: olaresdemo
+  minio:
+    username: olaresdemo
+    buckets:
+    - name: olaresdemo
+
+workloadReplicas:
+  olaresdemo: 1
+
+envs:
+- envName: AUTH_SECRET
+  required: true
+  type: password
+  editable: true
+  applyOnChange: true
+  description: Better Auth signing secret (32+ random chars). Paste from a secure store; never commit.
+- envName: BETTER_AUTH_URL
+  required: true
+  type: string
+  editable: true
+  applyOnChange: true
+  default: "https://web.olaresdemo.woojinc1205.olares.com"
+  description: Public HTTPS base URL of this entrance (no trailing slash). Used for OAuth callbacks.
+- envName: GOOGLE_CLIENT_ID
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: ""
+  description: Optional. Enables Google OAuth when set with GOOGLE_CLIENT_SECRET.
+- envName: GOOGLE_CLIENT_SECRET
+  required: false
+  type: password
+  editable: true
+  applyOnChange: true
+  description: Optional Google OAuth client secret.
+- envName: GITHUB_CLIENT_ID
+  required: false
+  type: string
+  editable: true
+  applyOnChange: true
+  default: ""
+  description: Optional. Enables GitHub OAuth when set with GITHUB_CLIENT_SECRET.
+- envName: GITHUB_CLIENT_SECRET
+  required: false
+  type: password
+  editable: true
+  applyOnChange: true
+  description: Optional GitHub OAuth client secret.

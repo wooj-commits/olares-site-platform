@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: olaresdemo
+  namespace: '{{ .Release.Namespace }}'
+  labels:
+    app: olaresdemo
+spec:
+  replicas: {{ .Values.workloads.olaresdemo.replicaCount }}
+  selector:
+    matchLabels:
+      app: olaresdemo
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: olaresdemo
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: olaresdemo
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        {{- $oe := .Values.olaresEnv | default dict }}
+        - name: NODE_ENV
+          value: {{ .Values.env.NODE_ENV | quote }}
+        - name: PORT
+          value: {{ .Values.env.PORT | quote }}
+        - name: HOSTNAME
+          value: "0.0.0.0"
+        - name: BETTER_AUTH_URL
+          value: {{ index $oe "BETTER_AUTH_URL" | default "https://web.olaresdemo.woojinc1205.olares.com" | quote }}
+        - name: GOOGLE_CLIENT_ID
+          value: {{ index $oe "GOOGLE_CLIENT_ID" | default "" | quote }}
+        - name: GITHUB_CLIENT_ID
+          value: {{ index $oe "GITHUB_CLIENT_ID" | default "" | quote }}
+        - name: MINIO_ENDPOINT
+          value: {{ printf "%s:%v" .Values.minio.host .Values.minio.port | quote }}
+        - name: MINIO_BUCKET
+          value: {{ .Values.minio.buckets.olaresdemo | quote }}
+        - name: MINIO_USE_SSL
+          value: {{ .Values.env.MINIO_USE_SSL | quote }}
+        - name: AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-app
+              key: AUTH_SECRET
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-app
+              key: DATABASE_URL
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-app
+              key: MINIO_ACCESS_KEY
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-app
+              key: MINIO_SECRET_KEY
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-app
+              key: GOOGLE_CLIENT_SECRET
+              optional: true
+        - name: GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-app
+              key: GITHUB_CLIENT_SECRET
+              optional: true
+        resources:
+          requests:
+            cpu: {{ .Values.resources.requests.cpu | quote }}
+            memory: {{ .Values.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.resources.limits.cpu | quote }}
+            memory: {{ .Values.resources.limits.memory | quote }}
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: olaresdemo
+  namespace: '{{ .Release.Namespace }}'
+spec:
+  selector:
+    app: olaresdemo
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000

@@ -1,0 +1,21 @@
+image:
+  repository: ghcr.io/wooj-commits/olares-site-platform
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+workloads:
+  olaresdemo:
+    replicaCount: 1
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+env:
+  NODE_ENV: production
+  PORT: "3000"
+  MINIO_USE_SSL: "false"
