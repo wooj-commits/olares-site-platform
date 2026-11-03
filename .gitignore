@@ -12,3 +12,9 @@ coverage/
 apps/demo/.env
 .venv-ci/
 **/.ci-stub-values.yaml
+
+__pycache__/
+*.py[cod]
+.venv/
+.venv-ci/
+dist/*.tgz
