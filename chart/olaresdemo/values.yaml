@@ -1,10 +1,17 @@
 image:
   repository: ghcr.io/wooj-commits/olares-site-platform
-  tag: "0.1.0"
+  tag: "0.1.1"
+  pullPolicy: IfNotPresent
+
+minioImage:
+  repository: docker.io/beclab/minio-minio
+  tag: "RELEASE.2023-12-20T01-00-02Z"
   pullPolicy: IfNotPresent
 
 workloads:
   olaresdemo:
+    replicaCount: 1
+  minio:
     replicaCount: 1
 
 resources:
@@ -15,7 +22,17 @@ resources:
     cpu: "2"
     memory: 2Gi
 
+minioResources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
 env:
   NODE_ENV: production
   PORT: "3000"
   MINIO_USE_SSL: "false"
+  MINIO_BUCKET: olaresdemo
+  MINIO_ACCESS_KEY: olaresdemo

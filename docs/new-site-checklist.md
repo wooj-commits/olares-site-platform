@@ -1,105 +1,95 @@
-# New site checklist (Olares native platform)
+# New site checklist (Olares multi-runtime platform)
 
-Stack for the demo and recommended default: **Next.js 15 (App Router) single container** with Better Auth, system Postgres middleware, and Market MinIO middleware.
+Host any runtime the way Vercel/Render would: **bring a Dockerfile**, or let CI **auto-build with Nixpacks** (fallback: Cloud Native Buildpacks).
+
+## Stack options
+
+| Path | When |
+|------|------|
+| Copy a starter from `starters/*` | Fastest — Dockerfile + `/api/health` included |
+| Existing app with Dockerfile | Point GH Actions / chart at that context |
+| No Dockerfile | CI uses Nixpacks, then Buildpacks |
+
+**End-to-end proof apps in this repo**
+
+- `apps/demo` — Next.js + Better Auth + system Postgres + bundled MinIO
+- `apps/fastapi-hello` — FastAPI second-runtime proof (no DB)
 
 ## Prerequisites
 
-1. Olares ≥ 1.12.7 with admin Market access.
-2. **MinIO** installed from Market (admin middleware). Do not stop/uninstall other apps.
-3. GitHub repo + GHCR push rights (`packages: write`).
-4. A 32+ character `AUTH_SECRET` kept only in a secure store (never commit).
+1. Olares ≥ 1.12.7
+2. Do **not** depend on Market MinIO/Postgres apps (Market MinIO mirrors can 404; Postgres is system middleware)
+3. GHCR push rights
 
-## 1. Scaffold from the reusable chart
+## 1. Pick a starter (or your app)
+
+```bash
+cp -R starters/python-fastapi ~/code/mysite   # or nextjs, go, django, …
+cd ~/code/mysite
+# edit; keep GET /api/health returning 2xx
+```
+
+Ports by starter: see `starters/README.md`.
+
+## 2. Chart from site-template
 
 ```bash
 cp -R chart/site-template chart/mysite
-# Replace SITE_* / OWNER / REPO / OLARES_ID placeholders (see chart/site-template/README.md)
+# Replace SITE_* placeholders
+# values.yaml:
+#   port: <listen port>
+#   healthPath: /api/health
+#   postgres.enabled: true|false   # also add/remove middleware.postgres in OlaresManifest
+#   storage.enabled: true|false    # bundled MinIO on userspace appData; S3 env injected
+#   resources / env as needed
 ```
 
-Or fork `apps/demo` and point `chart/*/values.yaml` image at your GHCR repo.
+AUTH_SECRET (and MinIO password when storage is on) are **auto-generated** (`lookup` + `randAlphaNum`) — no typing at install.
 
-## 2. App code expectations
+## 3. CI → public GHCR + chart `.tgz`
 
-- `GET /api/health` — returns 200 when Postgres is reachable (MinIO status reported in JSON).
-- Better Auth at `/api/auth/*` with email/password always on.
-- Google / GitHub OAuth only when both `*_CLIENT_ID` and `*_CLIENT_SECRET` are set.
-- Session-scoped Postgres CRUD and MinIO keys under `{userId}/…`.
+Workflow `.github/workflows/publish.yml`:
 
-## 3. CI → public GHCR + chart artifact
+1. For each matrix context: if `Dockerfile` → docker buildx; else Nixpacks; else pack/Buildpacks
+2. Push `ghcr.io/<owner>/<image>:<version>` (+ `:latest`), attempt public visibility
+3. `helm package` charts → release assets
 
-Push to `main`. Workflow `.github/workflows/publish.yml`:
-
-1. Builds `linux/amd64` image → `ghcr.io/<owner>/<repo>:<version>` + `:latest`.
-2. Attempts to set package visibility **public**.
-3. `helm package chart/<app>` and uploads the `.tgz` as a release / workflow artifact.
-
-After first publish, confirm the package is public in GitHub Packages (UI) if the API patch is a no-op.
+For a **new single-app repo**, copy the workflow and set matrix to one context `.`.
 
 ## 4. Install on Olares
 
-1. Market → ensure **MinIO** is installed (middleware).
-2. Market → My Olares → **Upload** the chart `.tgz`.
-3. Install. When prompted, set:
-   - `AUTH_SECRET` — paste from your secure store
-   - `BETTER_AUTH_URL` — `https://web.<app>.<olares-id>.olares.com` (no trailing slash)
-4. Leave Google/GitHub empty until OAuth apps are ready.
-5. Wait until app state is **running**. Entrance is **public** by default in the chart.
+1. Download the chart `.tgz` from the GitHub Release
+2. Market → My Olares → **Upload** → Install
+3. Optional Settings only: OAuth client IDs/secrets, or `BETTER_AUTH_URL` override if the entrance URL is wrong
+4. Wait until **running**; entrance is **public** by default
 
-Confirm URL (typical pattern):
+No Market MinIO install required for the demo (storage is in-chart). System Postgres is provisioned from the `middleware.postgres` block alone (no `options.dependencies` middleware entries).
 
-`https://web.<appid>.<olares-id>.olares.com`
+## 5. OAuth (Next.js / Better Auth apps only)
 
-## 5. OAuth (optional, later)
+Callbacks:
 
-Callback URLs (Better Auth):
+- `{public_base}/api/auth/callback/google`
+- `{public_base}/api/auth/callback/github`
 
-- Google: `{BETTER_AUTH_URL}/api/auth/callback/google`
-- GitHub: `{BETTER_AUTH_URL}/api/auth/callback/github`
+Paste credentials in Settings → Applications → [app]. Leave empty to keep social login disabled.
 
-Where credentials go:
-
-1. Create OAuth clients in Google Cloud Console / GitHub Developer Settings with the callbacks above.
-2. Paste `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` into **Settings → Applications → [app] → env**.
-3. Restart / wait for applyOnChange so the pod picks them up. Buttons appear only when both id+secret are present.
-
-## 6. Acceptance tests
+## 6. Acceptance tests (Next.js demo)
 
 ```bash
-BASE=https://web.<appid>.<olares-id>.olares.com
+BASE=https://<entrance-host>   # from Settings / entrances list
 
-# Health
 curl -fsS "$BASE/api/health" | jq .
-
-# Register + login (cookie jar)
-curl -fsS -c /tmp/od.jar -H 'content-type: application/json' \
-  -d '{"email":"demo@example.com","password":"demopass1","name":"Demo"}' \
-  "$BASE/api/auth/sign-up/email"
-curl -fsS -c /tmp/od.jar -b /tmp/od.jar -H 'content-type: application/json' \
-  -d '{"email":"demo@example.com","password":"demopass1"}' \
-  "$BASE/api/auth/sign-in/email"
-
-# Notes CRUD
-curl -fsS -b /tmp/od.jar -H 'content-type: application/json' \
-  -d '{"title":"persist","body":"after restart"}' "$BASE/api/notes"
-curl -fsS -b /tmp/od.jar "$BASE/api/notes" | jq .
-
-# Upload
-echo hello > /tmp/hello.txt
-curl -fsS -b /tmp/od.jar -F file=@/tmp/hello.txt "$BASE/api/files" | jq .
-
-# Data survives restart: Settings → stop/start app (or market resume), then re-list notes/files.
+# register / login / notes / upload — see prior checklist examples
 ```
 
-## 7. Non-destructive upgrade (auto-deploy target)
+FastAPI hello: `curl -fsS "$BASE/api/health"` → `{"ok":true,"runtime":"fastapi-hello",...}`.
 
-When CI on `main` is green and a new image+chart are published:
+## 7. Non-destructive upgrade
 
-1. Do **not** uninstall other apps; do **not** delete the Postgres DB or MinIO bucket.
-2. Upload the new chart `.tgz` (or Market upgrade if listed).
-3. Confirm image tag in values matches the green build.
-4. Upgrade / resume only this app; wait for `running`.
-5. Re-hit `/api/health` and spot-check notes + files.
+Upload new `.tgz` / upgrade only this app. Do not wipe Postgres DB or `userspace.appData` MinIO data. Re-hit `/api/health`.
 
-## Auto-deploy routine (create separately)
+## Auto-deploy routine
 
-See repo root `README.md` for the exact routine prompt + GitHub `ci-passed` / `main` trigger shape.
+Trigger: `{ "type": "github", "repo": "wooj-commits/olares-site-platform", "events": ["ci-passed"], "ciBranch": "main" }`  
+(Prompt unchanged — upgrade `olaresdemo` after green main.)

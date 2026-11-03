@@ -24,7 +24,7 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - name: http
-          containerPort: 3000
+          containerPort: {{ .Values.env.PORT | int }}
           protocol: TCP
         env:
         {{- $oe := .Values.olaresEnv | default dict }}
@@ -35,15 +35,15 @@ spec:
         - name: HOSTNAME
           value: "0.0.0.0"
         - name: BETTER_AUTH_URL
-          value: {{ index $oe "BETTER_AUTH_URL" | default "https://web.olaresdemo.woojinc1205.olares.com" | quote }}
+          value: {{ include "olaresdemo.betterAuthURL" . | quote }}
         - name: GOOGLE_CLIENT_ID
           value: {{ index $oe "GOOGLE_CLIENT_ID" | default "" | quote }}
         - name: GITHUB_CLIENT_ID
           value: {{ index $oe "GITHUB_CLIENT_ID" | default "" | quote }}
         - name: MINIO_ENDPOINT
-          value: {{ printf "%s:%v" .Values.minio.host .Values.minio.port | quote }}
+          value: "minio:9000"
         - name: MINIO_BUCKET
-          value: {{ .Values.minio.buckets.olaresdemo | quote }}
+          value: {{ .Values.env.MINIO_BUCKET | quote }}
         - name: MINIO_USE_SSL
           value: {{ .Values.env.MINIO_USE_SSL | quote }}
         - name: AUTH_SECRET
@@ -109,5 +109,5 @@ spec:
     app: olaresdemo
   ports:
   - name: http
-    port: 3000
-    targetPort: 3000
+    port: {{ .Values.env.PORT | int }}
+    targetPort: {{ .Values.env.PORT | int }}

@@ -1,0 +1,53 @@
+olaresManifest.version: '0.12.0'
+olaresManifest.type: app
+apiVersion: 'v3'
+metadata:
+  name: fastapihello
+  appid: fastapihello
+  title: FastAPI Hello
+  description: Minimal FastAPI app proving non-Next.js runtimes on Olares
+  icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
+  version: 0.1.1
+  categories:
+  - Developer Tools
+entrances:
+- name: web
+  host: fastapihello
+  port: 8000
+  title: FastAPI Hello
+  icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
+  authLevel: public
+  visible: true
+  openMethod: window
+permission:
+  appData: false
+spec:
+  versionName: '0.1.1'
+  fullDescription: |
+    Hello-world FastAPI container for the multi-runtime Olares site platform.
+    No Postgres or MinIO. Image: ghcr.io/wooj-commits/olares-site-platform-fastapi.
+  developer: woojinc1205
+  website: https://github.com/wooj-commits/olares-site-platform
+  sourceCode: https://github.com/wooj-commits/olares-site-platform
+  submitter: woojinc1205
+  locale: [en-US]
+  license:
+  - text: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  supportArch: [amd64]
+  accelerator:
+  - mode: cpu
+    requiredCpu: 50m
+    limitedCpu: "500m"
+    requiredMemory: 128Mi
+    limitedMemory: 512Mi
+    requiredDisk: 64Mi
+    limitedDisk: 1Gi
+options:
+  apiTimeout: 0
+  dependencies:
+  - name: olares
+    type: system
+    version: '>=1.12.7-0'
+workloadReplicas:
+  fastapihello: 1

@@ -1,21 +1,55 @@
+# Replace image before install. Built by GH Actions from Dockerfile or Nixpacks/CNB.
 image:
   repository: ghcr.io/OWNER/SITE_IMAGE
-  tag: "0.1.0"
+  tag: "0.1.1"
   pullPolicy: IfNotPresent
 
+# Container listen port (must match the process inside the image)
+port: 3000
+
+# HTTP path for readiness/liveness (GET → 2xx)
+healthPath: /api/health
+
+# Replica count for the main app workload (key must match SITE_NAME in manifests)
 workloads:
   SITE_NAME:
+    replicaCount: 1
+  # Only used when storage.enabled
+  minio:
     replicaCount: 1
 
 resources:
   requests:
-    cpu: 250m
-    memory: 512Mi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: "2"
-    memory: 2Gi
+    cpu: "1"
+    memory: 1Gi
 
-env:
-  NODE_ENV: production
-  PORT: "3000"
-  MINIO_USE_SSL: "false"
+# Extra non-secret env (secrets via Olares Settings → olaresEnv / chart Secret)
+env: {}
+
+# Optional system Postgres middleware (.Values.postgres.* injected when enabled in OlaresManifest)
+postgres:
+  enabled: true
+
+# Bundled MinIO on userspace appData (S3-compatible). Set enabled: false for static sites.
+storage:
+  enabled: true
+  bucket: SITE_NAME
+  accessKey: SITE_NAME
+  endpoint: "minio:9000"
+  useSSL: "false"
+
+minioImage:
+  repository: docker.io/beclab/minio-minio
+  tag: "RELEASE.2023-12-20T01-00-02Z"
+  pullPolicy: IfNotPresent
+
+minioResources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi

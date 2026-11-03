@@ -1,47 +1,42 @@
 # olares-site-platform
 
-Reusable native Olares hosting for small sites: **Next.js 15 single container**, Better Auth, system Postgres, Market MinIO.
+Multi-runtime native Olares hosting (Vercel/Render-class): **any Dockerfile**, or **Nixpacks / Cloud Native Buildpacks** when none exists.
 
 | Piece | Location |
 |-------|----------|
-| Demo app | `apps/demo` |
-| Installable chart | `chart/olaresdemo` |
-| Copy-paste chart template | `chart/site-template` |
-| New site steps | `docs/new-site-checklist.md` |
-| Image | `ghcr.io/wooj-commits/olares-site-platform` (public) |
+| Next.js e2e demo (auth + Postgres + MinIO) | `apps/demo` |
+| FastAPI second-runtime proof | `apps/fastapi-hello` |
+| Runtime starters | `starters/*` |
+| Installable charts | `chart/olaresdemo`, `chart/fastapihello` |
+| Copy-paste chart | `chart/site-template` (port, healthPath, env, resources, optional postgres/storage) |
+| Checklist | `docs/new-site-checklist.md` |
 
-## Stack (chosen)
+## Images (public GHCR)
 
-**Next.js 15 (App Router) + Better Auth + `pg` + AWS SDK S3 client**, one Docker image (`output: "standalone"`). No separate API service.
+- `ghcr.io/wooj-commits/olares-site-platform` — Next.js demo
+- `ghcr.io/wooj-commits/olares-site-platform-fastapi` — FastAPI hello
 
-## Demo URL (after install)
+## Design notes (0.1.1+)
 
-`https://web.olaresdemo.woojinc1205.olares.com`
+- **System Postgres** via `middleware.postgres` only — no Market postgres/minio `options.dependencies`
+- **Bundled MinIO** (`docker.io/beclab/minio-minio`) on `userspace.appData` — Market MinIO mirrors can 404
+- **AUTH_SECRET** auto-generated (Helm `lookup` + `randAlphaNum`), persists across upgrades
 
-## OAuth callbacks
+## OAuth callbacks (demo)
 
-- `https://web.olaresdemo.woojinc1205.olares.com/api/auth/callback/google`
-- `https://web.olaresdemo.woojinc1205.olares.com/api/auth/callback/github`
+- `https://<entrance>/api/auth/callback/google`
+- `https://<entrance>/api/auth/callback/github`
 
-Credentials go in Olares **Settings → Applications → Olares Demo** (`GOOGLE_*` / `GITHUB_*`). Leave empty to keep social login disabled.
+## Auto-deploy routine (create in Grok Bot)
 
-## Auto-deploy routine (create in Grok Bot — do not invent secrets)
-
-**Trigger (GitHub):**
-
+**Trigger:**
 ```json
-{
-  "type": "github",
-  "repo": "wooj-commits/olares-site-platform",
-  "events": ["ci-passed"],
-  "ciBranch": "main"
-}
+{"type":"github","repo":"wooj-commits/olares-site-platform","events":["ci-passed"],"ciBranch":"main"}
 ```
 
-**Routine prompt (paste as-is):**
-
+**Prompt:**
 ```
-When CI passes on main for wooj-commits/olares-site-platform, non-destructively upgrade the Olares demo app olaresdemo on woojinc1205: download the latest chart .tgz release asset (or workflow artifact), upload/upgrade via Market or olares-cli without uninstalling other apps or wiping Postgres/MinIO data, wait until the app is running, then hit https://web.olaresdemo.woojinc1205.olares.com/api/health and report status. If olares-cli needs profile login or Market auth, pause and ask Woojin in this chat. Never print or commit secrets. Deliver the result to the user in this chat; if nothing changed beyond a green build already deployed, say so briefly.
+When CI passes on main for wooj-commits/olares-site-platform, non-destructively upgrade the Olares demo app olaresdemo on woojinc1205: download the latest chart .tgz release asset (or workflow artifact), upload/upgrade via Market or olares-cli without uninstalling other apps or wiping Postgres/MinIO data, wait until the app is running, then hit the demo entrance /api/health and report status. If olares-cli needs profile login or Market auth, pause and ask Woojin in this chat. Never print or commit secrets. Deliver the result to the user in this chat; if nothing changed beyond a green build already deployed, say so briefly.
 ```
 
 ## License

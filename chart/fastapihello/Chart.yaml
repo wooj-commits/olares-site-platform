@@ -1,0 +1,6 @@
+apiVersion: v2
+name: fastapihello
+description: FastAPI hello — second-runtime proof for olares-site-platform
+type: application
+version: 0.1.1
+appVersion: "0.1.1"

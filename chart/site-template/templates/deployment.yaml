@@ -1,61 +1,52 @@
+{{- $app := "SITE_NAME" -}}
+{{- $port := .Values.port | default 3000 | int -}}
+{{- $health := .Values.healthPath | default "/api/health" -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: SITE_NAME
+  name: {{ $app }}
   namespace: '{{ .Release.Namespace }}'
   labels:
-    app: SITE_NAME
+    app: {{ $app }}
 spec:
-  replicas: {{ .Values.workloads.SITE_NAME.replicaCount }}
+  replicas: {{ index .Values.workloads $app | default dict | dig "replicaCount" 1 }}
   selector:
     matchLabels:
-      app: SITE_NAME
+      app: {{ $app }}
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: SITE_NAME
+        app: {{ $app }}
     spec:
       automountServiceAccountToken: false
       containers:
-      - name: SITE_NAME
+      - name: {{ $app }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - name: http
-          containerPort: 3000
+          containerPort: {{ $port }}
           protocol: TCP
         env:
-        {{- $oe := .Values.olaresEnv | default dict }}
-        - name: NODE_ENV
-          value: {{ .Values.env.NODE_ENV | quote }}
         - name: PORT
-          value: {{ .Values.env.PORT | quote }}
+          value: {{ $port | quote }}
         - name: HOSTNAME
           value: "0.0.0.0"
         - name: BETTER_AUTH_URL
-          value: {{ index $oe "BETTER_AUTH_URL" | default "https://web.SITE_NAME.OLARES_ID.olares.com" | quote }}
-        - name: GOOGLE_CLIENT_ID
-          value: {{ index $oe "GOOGLE_CLIENT_ID" | default "" | quote }}
-        - name: GITHUB_CLIENT_ID
-          value: {{ index $oe "GITHUB_CLIENT_ID" | default "" | quote }}
+          value: {{ include "site.betterAuthURL" . | quote }}
+        {{- range $k, $v := .Values.env }}
+        - name: {{ $k }}
+          value: {{ $v | quote }}
+        {{- end }}
+        {{- if .Values.storage.enabled }}
         - name: MINIO_ENDPOINT
-          value: {{ printf "%s:%v" .Values.minio.host .Values.minio.port | quote }}
+          value: {{ .Values.storage.endpoint | quote }}
         - name: MINIO_BUCKET
-          value: {{ .Values.minio.buckets.SITE_NAME | quote }}
+          value: {{ .Values.storage.bucket | quote }}
         - name: MINIO_USE_SSL
-          value: {{ .Values.env.MINIO_USE_SSL | quote }}
-        - name: AUTH_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Release.Name }}-app
-              key: AUTH_SECRET
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Release.Name }}-app
-              key: DATABASE_URL
+          value: {{ .Values.storage.useSSL | quote }}
         - name: MINIO_ACCESS_KEY
           valueFrom:
             secretKeyRef:
@@ -66,18 +57,19 @@ spec:
             secretKeyRef:
               name: {{ .Release.Name }}-app
               key: MINIO_SECRET_KEY
-        - name: GOOGLE_CLIENT_SECRET
+        {{- end }}
+        - name: AUTH_SECRET
           valueFrom:
             secretKeyRef:
               name: {{ .Release.Name }}-app
-              key: GOOGLE_CLIENT_SECRET
-              optional: true
-        - name: GITHUB_CLIENT_SECRET
+              key: AUTH_SECRET
+        {{- if and .Values.postgres.enabled .Values.postgres.host }}
+        - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
               name: {{ .Release.Name }}-app
-              key: GITHUB_CLIENT_SECRET
-              optional: true
+              key: DATABASE_URL
+        {{- end }}
         resources:
           requests:
             cpu: {{ .Values.resources.requests.cpu | quote }}
@@ -87,13 +79,14 @@ spec:
             memory: {{ .Values.resources.limits.memory | quote }}
         readinessProbe:
           httpGet:
-            path: /api/health
+            path: {{ $health | quote }}
             port: http
           initialDelaySeconds: 10
           periodSeconds: 10
+          failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: /api/health
+            path: {{ $health | quote }}
             port: http
           initialDelaySeconds: 30
           periodSeconds: 20
@@ -101,12 +94,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: SITE_NAME
+  name: {{ $app }}
   namespace: '{{ .Release.Namespace }}'
 spec:
   selector:
-    app: SITE_NAME
+    app: {{ $app }}
   ports:
   - name: http
-    port: 3000
-    targetPort: 3000
+    port: {{ $port }}
+    targetPort: {{ $port }}

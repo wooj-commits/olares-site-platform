@@ -8,7 +8,7 @@ metadata:
   title: SITE_TITLE
   description: SITE_DESCRIPTION
   icon: https://app.cdn.olares.com/appstore/default/defaulticon.webp
-  version: 0.1.0
+  version: 0.1.1
   categories:
   - Developer Tools
   - Productivity_v112
@@ -27,12 +27,13 @@ permission:
   appData: true
 
 spec:
-  versionName: '0.1.0'
+  versionName: '0.1.1'
   fullDescription: |
     SITE_DESCRIPTION
 
-    Generated from chart/site-template in wooj-commits/olares-site-platform.
-    Replace SITE_* placeholders before packaging.
+    From chart/site-template in wooj-commits/olares-site-platform.
+    Replace SITE_* placeholders. Optional Postgres middleware and bundled MinIO
+    are toggled in values.yaml + this manifest. AUTH_SECRET is auto-generated.
   developer: SITE_DEVELOPER
   website: https://github.com/OWNER/REPO
   sourceCode: https://github.com/OWNER/REPO
@@ -46,12 +47,12 @@ spec:
   - amd64
   accelerator:
   - mode: cpu
-    requiredCpu: 250m
-    limitedCpu: "2"
-    requiredMemory: 512Mi
-    limitedMemory: 2Gi
+    requiredCpu: 100m
+    limitedCpu: "1"
+    requiredMemory: 256Mi
+    limitedMemory: 1Gi
     requiredDisk: 256Mi
-    limitedDisk: 5Gi
+    limitedDisk: 10Gi
 
 options:
   apiTimeout: 0
@@ -59,65 +60,23 @@ options:
   - name: olares
     type: system
     version: '>=1.12.7-0'
-  - name: postgres
-    type: middleware
-    version: '>=1.0.0-0'
-    mandatory: true
-  - name: minio
-    type: middleware
-    version: '>=1.0.0-0'
-    mandatory: true
 
+# System Postgres (always available). Remove this block for static-only sites.
 middleware:
   postgres:
     username: SITE_NAME
     databases:
     - name: SITE_NAME
-  minio:
-    username: SITE_NAME
-    buckets:
-    - name: SITE_NAME
 
 workloadReplicas:
   SITE_NAME: 1
+  minio: 1
 
 envs:
-- envName: AUTH_SECRET
-  required: true
-  type: password
-  editable: true
-  applyOnChange: true
-  description: Better Auth signing secret (32+ random chars).
 - envName: BETTER_AUTH_URL
-  required: true
-  type: string
-  editable: true
-  applyOnChange: true
-  default: "https://web.SITE_NAME.OLARES_ID.olares.com"
-  description: Public HTTPS base URL of this entrance (no trailing slash).
-- envName: GOOGLE_CLIENT_ID
   required: false
   type: string
   editable: true
   applyOnChange: true
   default: ""
-  description: Optional Google OAuth client id.
-- envName: GOOGLE_CLIENT_SECRET
-  required: false
-  type: password
-  editable: true
-  applyOnChange: true
-  description: Optional Google OAuth client secret.
-- envName: GITHUB_CLIENT_ID
-  required: false
-  type: string
-  editable: true
-  applyOnChange: true
-  default: ""
-  description: Optional GitHub OAuth client id.
-- envName: GITHUB_CLIENT_SECRET
-  required: false
-  type: password
-  editable: true
-  applyOnChange: true
-  description: Optional GitHub OAuth client secret.
+  description: Optional public HTTPS base URL override (auth-capable apps).

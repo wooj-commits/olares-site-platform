@@ -1,14 +1,22 @@
 # site-template
 
-Copy this folder, then replace placeholders:
+Language-agnostic Olares chart for any container image (Dockerfile, Nixpacks, or Cloud Native Buildpacks).
 
-| Placeholder | Example |
-|-------------|---------|
-| `SITE_NAME` | `mysite` (lowercase, chart/app id) |
+## Placeholders
+
+| Token | Example |
+|-------|---------|
+| `SITE_NAME` | `mysite` |
 | `SITE_TITLE` | `My Site` |
 | `SITE_DESCRIPTION` | short blurb |
-| `SITE_DEVELOPER` | your olares id |
-| `OWNER` / `REPO` / `SITE_IMAGE` | ghcr image coords |
-| `OLARES_ID` | e.g. `woojinc1205` |
+| `SITE_DEVELOPER` / `OWNER` / `REPO` / `SITE_IMAGE` | coords |
+| Entrance `port` in OlaresManifest | match `values.port` |
 
-See `docs/new-site-checklist.md` for the full flow.
+## values.yaml knobs
+
+- `port`, `healthPath` — probe + Service
+- `resources`, `env` — CPU/mem + extra env
+- `postgres.enabled` — system middleware (also edit/remove `middleware:` in OlaresManifest)
+- `storage.enabled` — bundled MinIO on `userspace.appData` (S3 env injected; swap to shared MinIO later by pointing `storage.endpoint`)
+
+AUTH_SECRET (and MinIO password when storage is on) are generated once via `lookup` + `randAlphaNum`.
